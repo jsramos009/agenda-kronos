@@ -11,14 +11,27 @@ type NicheContextValue = {
   setCompanyName: (name: string) => void;
 };
 
+type NicheProviderProps = {
+  children: React.ReactNode;
+  initialNicheId?: NicheId;
+  initialCompanyName?: string;
+  initialTheme?: Niche["theme"];
+};
+
 const NicheContext = createContext<NicheContextValue | null>(null);
 
-export function NicheProvider({ children }: { children: React.ReactNode }) {
-  const [nicheId, updateNicheId] = useState<NicheId>("climatizacao");
-  const [companyName, updateCompanyName] = useState("Clima Prime");
+export function NicheProvider({
+  children,
+  initialNicheId = "climatizacao",
+  initialCompanyName = "Clima Prime",
+  initialTheme,
+}: NicheProviderProps) {
+  const [nicheId, updateNicheId] = useState<NicheId>(initialNicheId);
+  const [companyName, updateCompanyName] = useState(initialCompanyName);
 
   useEffect(() => {
     const hydrationTimer = window.setTimeout(() => {
+      if (initialNicheId !== "climatizacao" || initialCompanyName !== "Clima Prime") return;
       const savedNiche = window.localStorage.getItem("kronos:niche") as NicheId | null;
       const savedCompany = window.localStorage.getItem("kronos:company");
       if (savedNiche && niches[savedNiche]) updateNicheId(savedNiche);
@@ -26,7 +39,7 @@ export function NicheProvider({ children }: { children: React.ReactNode }) {
     }, 0);
 
     return () => window.clearTimeout(hydrationTimer);
-  }, []);
+  }, [initialCompanyName, initialNicheId]);
 
   const setNicheId = (id: NicheId) => {
     updateNicheId(id);
@@ -43,7 +56,7 @@ export function NicheProvider({ children }: { children: React.ReactNode }) {
     [companyName, nicheId],
   );
 
-  const theme = niches[nicheId].theme;
+  const theme = initialTheme ?? niches[nicheId].theme;
   const variables = {
     "--tenant-primary": theme.primary,
     "--tenant-accent": theme.accent,

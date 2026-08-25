@@ -1,8 +1,9 @@
 "use client";
 
 import { ArrowUpRight, CalendarPlus, Clock3, Plus } from "lucide-react";
+import Link from "next/link";
 
-export function PageHeader({ eyebrow, title, description, action = "Novo agendamento" }: { eyebrow: string; title: string; description: string; action?: string | null }) {
+export function PageHeader({ eyebrow, title, description, action = "Novo agendamento", actionHref }: { eyebrow: string; title: string; description: string; action?: string | null; actionHref?: string }) {
   return (
     <header className="page-header">
       <div>
@@ -10,7 +11,7 @@ export function PageHeader({ eyebrow, title, description, action = "Novo agendam
         <h1>{title}</h1>
         <p>{description}</p>
       </div>
-      {action ? <button className="button button--primary"><CalendarPlus size={17} />{action}</button> : null}
+      {action && actionHref ? <Link className="button button--primary" href={actionHref}><CalendarPlus size={17} />{action}</Link> : null}
     </header>
   );
 }
@@ -55,4 +56,3 @@ export function EmptyState({ title, text, action }: { title: string; text: strin
     </div>
   );
 }
-

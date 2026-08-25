@@ -1,27 +1,44 @@
-"use client";
+import { KanbanBoard, type KanbanCard, type KanbanStage } from "@/components/kanban-board";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentWorkspace } from "@/lib/workspace";
+import { niches } from "@/lib/niches";
 
-import { Filter, MoreHorizontal, Plus, Search } from "lucide-react";
-import { useNiche } from "@/components/niche-provider";
-import { PageHeader } from "@/components/ui";
+export default async function AtendimentosPage() {
+  const workspace = await getCurrentWorkspace();
+  const niche = niches[workspace?.nicheId ?? "climatizacao"];
+  let stages: KanbanStage[] = niche.workflow.map((stage, index) => ({ id: `demo-${index}`, name: stage.name, color: niche.theme.primary, position: index }));
+  let cards: KanbanCard[] = ["João Silva", "Maria Santos", "Pedro Costa", "Ana Oliveira", "Carlos Lima", "Fernanda Rocha", "Juliana Alves", "Ricardo Gomes"].map((client, index) => ({ id: `card-${index}`, stageId: stages[index % stages.length].id, code: `ATD-${String(1000 + index)}`, client, service: niche.services[index % niche.services.length].name, time: index % 2 ? "11:20" : "10:15", assignee: "Ana Martins", aging: index % 4 === 2 ? "Peça pendente" : "No prazo" }));
 
-const clients = ["João Silva", "Maria Santos", "Pedro Costa", "Ana Oliveira", "Carlos Lima", "Fernanda Rocha", "Juliana Alves", "Ricardo Gomes"];
+  if (workspace?.organizationId) {
+    const supabase = await createClient();
+    const [{ data: stageData, error: stageError }, { data: itemData, error: itemError }] = await Promise.all([
+      supabase.from("workflow_stages").select("id, name, color, position").eq("organization_id", workspace.organizationId).eq("visible", true).order("position"),
+      supabase.from("work_items").select("id, stage_id, entered_stage_at, appointments(id, starts_at, customers(name), services(name)), organization_members(display_name)").eq("organization_id", workspace.organizationId).order("entered_stage_at"),
+    ]);
+    if (stageError || itemError) throw new Error(stageError?.message ?? itemError?.message);
+    stages = (stageData ?? []).map((stage) => ({ id: stage.id, name: stage.name, color: stage.color ?? workspace.theme.primary, position: stage.position }));
+    cards = (itemData ?? []).map((item, index) => {
+      const appointment = firstRelation(item.appointments);
+      const enteredAt = new Date(item.entered_stage_at);
+      const ageHours = Math.max(0, Math.floor((Date.now() - enteredAt.getTime()) / 3_600_000));
+      return {
+        id: item.id,
+        stageId: item.stage_id,
+        code: `ATD-${String(index + 1).padStart(4, "0")}`,
+        client: relationName(appointment?.customers),
+        service: relationName(appointment?.services),
+        time: appointment?.starts_at ? new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(new Date(appointment.starts_at)) : "Prazo",
+        assignee: relationName(item.organization_members),
+        aging: ageHours < 24 ? `${ageHours}h na etapa` : `${Math.floor(ageHours / 24)}d na etapa`,
+      };
+    });
+  }
 
-export default function AtendimentosPage() {
-  const { niche } = useNiche();
-  return (
-    <>
-      <PageHeader eyebrow="Operação · Fluxo" title="Atendimentos" description={`Acompanhe cada etapa do fluxo de ${niche.label.toLowerCase()} sem perder prazo ou contexto.`} action="Novo atendimento" />
-      <div className="toolbar"><label className="inline-search"><Search size={16} /><input placeholder="Buscar no quadro…" /></label><div><button className="chip"><Filter size={15} /> Filtros</button><button className="chip">Minha equipe</button></div></div>
-      <section className="kanban-board">
-        {niche.workflow.map((stage, columnIndex) => (
-          <div className={`board-column tone-${stage.tone}`} key={stage.name}>
-            <header><div><i /><strong>{stage.name}</strong><span>{columnIndex + 2}</span></div><button aria-label={`Opções de ${stage.name}`}><MoreHorizontal size={17} /></button></header>
-            {clients.slice(columnIndex * 2, columnIndex * 2 + (columnIndex === 0 ? 3 : 2)).map((client, cardIndex) => <article key={client}><div className="card-top"><small>ATD-10{columnIndex}{cardIndex}</small><button aria-label="Mais opções"><MoreHorizontal size={15} /></button></div><h3>{client}</h3><p>{niche.services[(columnIndex + cardIndex) % niche.services.length].name}</p><div className="card-meta"><span>{cardIndex ? "11:20" : "10:15"}</span><em>{columnIndex === 2 ? "Peça pendente" : "No prazo"}</em></div><footer><span>{client.split(" ").map((part) => part[0]).join("")}</span><small>Ana Martins</small></footer></article>)}
-            <button className="add-card"><Plus size={15} /> Adicionar atendimento</button>
-          </div>
-        ))}
-      </section>
-    </>
-  );
+  return <KanbanBoard initialStages={stages} initialCards={cards} demo={!workspace?.organizationId} />;
 }
 
+function firstRelation<T>(value: T | T[] | null): T | null { return Array.isArray(value) ? value[0] ?? null : value; }
+function relationName(value: { name?: string; display_name?: string } | { name?: string; display_name?: string }[] | null | undefined) {
+  const item = firstRelation(value ?? null);
+  return item?.name ?? item?.display_name ?? "Sem identificação";
+}

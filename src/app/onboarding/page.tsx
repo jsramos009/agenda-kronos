@@ -6,6 +6,7 @@ import { ChangeEvent, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Clock3, ImagePlus, Sparkles, Upload } from "lucide-react";
 import { KronosMark } from "@/components/kronos-mark";
 import { nicheList, niches, type NicheId } from "@/lib/niches";
+import { completeOnboarding } from "./actions";
 
 const steps = ["Empresa", "Identidade", "Operação", "Modelos", "Revisão"];
 
@@ -16,6 +17,9 @@ export default function OnboardingPage() {
   const [description, setDescription] = useState("Instalação e manutenção de ar-condicionado para casas e empresas.");
   const [nicheId, setNicheId] = useState<NicheId>("climatizacao");
   const [logo, setLogo] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState<string | null>(null);
   const niche = niches[nicheId];
 
   const themeVars = {
@@ -28,15 +32,30 @@ export default function OnboardingPage() {
   const onLogo = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setLogoFile(file);
     const reader = new FileReader();
     reader.onload = () => setLogo(String(reader.result));
     reader.readAsDataURL(file);
   };
 
-  const activate = () => {
+  const activate = async () => {
+    setActivating(true);
+    setActivationError(null);
+    const formData = new FormData();
+    formData.set("companyName", companyName);
+    formData.set("description", description);
+    formData.set("nicheId", nicheId);
+    if (logoFile) formData.set("logo", logoFile);
+    const result = await completeOnboarding(formData);
+    if (!result.ok) {
+      setActivationError(result.message);
+      setActivating(false);
+      return;
+    }
     window.localStorage.setItem("kronos:niche", nicheId);
     window.localStorage.setItem("kronos:company", companyName || "Minha empresa");
     router.push("/dashboard");
+    router.refresh();
   };
 
   return (
@@ -150,12 +169,13 @@ export default function OnboardingPage() {
                 </div>
               </div>
               <div className="review-checks"><span><Check size={15} /> Tabela de cores aplicada</span><span><Check size={15} /> {niche.services.length} serviços criados</span><span><Check size={15} /> Kanban com {niche.workflow.length} etapas</span><span><Check size={15} /> Insights do nicho ativados</span></div>
+              {activationError ? <div className="form-message form-message--error">{activationError}</div> : null}
             </div>
           ) : null}
         </div>
         <footer className="onboarding__actions">
           <button className="button button--ghost" disabled={step === 0} onClick={() => setStep((current) => current - 1)}><ArrowLeft size={17} /> Voltar</button>
-          {step < steps.length - 1 ? <button className="button button--primary" onClick={() => setStep((current) => current + 1)}>Continuar <ArrowRight size={17} /></button> : <button className="button button--primary" onClick={activate}>Ativar meu espaço <Check size={17} /></button>}
+          {step < steps.length - 1 ? <button className="button button--primary" onClick={() => setStep((current) => current + 1)}>Continuar <ArrowRight size={17} /></button> : <button className="button button--primary" disabled={activating} onClick={activate}>{activating ? "Configurando…" : "Ativar meu espaço"} <Check size={17} /></button>}
         </footer>
       </section>
     </main>

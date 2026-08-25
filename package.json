@@ -13,7 +13,10 @@
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "@supabase/ssr": "0.12.5",
+    "@supabase/supabase-js": "2.112.4",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@playwright/cli": "latest",
@@ -22,6 +25,7 @@
     "@types/react-dom": "latest",
     "eslint": "^9.39.5",
     "eslint-config-next": "latest",
+    "supabase": "2.115.0",
     "typescript": "^6.0.2"
   }
 }

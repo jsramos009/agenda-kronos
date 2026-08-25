@@ -1,7 +1,6 @@
-"use client";
-
-import { Download, Search, SlidersHorizontal } from "lucide-react";
-import { PageHeader } from "@/components/ui";
+import { CustomerManager, type CustomerRow } from "@/components/customer-manager";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentWorkspace } from "@/lib/workspace";
 
 const clients = [
   ["João Silva", "(11) 98874-2231", "Manutenção preventiva", "Hoje, 09:00", "Ativo"],
@@ -12,13 +11,14 @@ const clients = [
   ["Ricardo Gomes", "(11) 93247-9065", "Instalação", "19 ago.", "Inativo"],
 ];
 
-export default function ClientesPage() {
-  return (
-    <>
-      <PageHeader eyebrow="Relacionamento" title="Clientes" description="Histórico, preferências e próximos atendimentos em um só lugar." action="Novo cliente" />
-      <div className="toolbar"><label className="inline-search inline-search--wide"><Search size={16} /><input placeholder="Buscar por nome ou telefone…" /></label><div><button className="chip"><SlidersHorizontal size={15} /> Filtros</button><button className="chip"><Download size={15} /> Exportar</button></div></div>
-      <section className="table-panel"><table><thead><tr><th>Cliente</th><th>Contato</th><th>Último serviço</th><th>Próximo/último horário</th><th>Status</th></tr></thead><tbody>{clients.map((client) => <tr key={client[0]}><td><div className="client-cell"><span>{client[0].split(" ").map((part) => part[0]).join("")}</span><strong>{client[0]}</strong></div></td><td>{client[1]}</td><td>{client[2]}</td><td>{client[3]}</td><td><em className={`status status--${client[4].toLowerCase().replace(" ", "-")}`}>{client[4]}</em></td></tr>)}</tbody></table><footer><span>6 de 248 clientes</span><div><button disabled>Anterior</button><button>Próxima</button></div></footer></section>
-    </>
-  );
+export default async function ClientesPage() {
+  const workspace = await getCurrentWorkspace();
+  let rows: CustomerRow[] = clients.map((client, index) => ({ id: `demo-${index}`, name: client[0], phone: client[1], email: null, createdAt: client[3], active: client[4] !== "Inativo" }));
+  if (workspace?.organizationId) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("customers").select("id, name, phone, email, active, created_at").eq("organization_id", workspace.organizationId).order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    rows = (data ?? []).map((customer) => ({ id: customer.id, name: customer.name, phone: customer.phone, email: customer.email, active: customer.active, createdAt: new Intl.DateTimeFormat("pt-BR").format(new Date(customer.created_at)) }));
+  }
+  return <CustomerManager customers={rows} demo={!workspace?.organizationId} />;
 }
-

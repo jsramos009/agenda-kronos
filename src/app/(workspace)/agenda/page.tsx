@@ -1,35 +1,44 @@
-"use client";
+import { AppointmentManager, type CalendarEvent } from "@/components/appointment-manager";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentWorkspace } from "@/lib/workspace";
 
-import { ChevronLeft, ChevronRight, Filter, List, Rows3 } from "lucide-react";
-import { PageHeader } from "@/components/ui";
-import { useNiche } from "@/components/niche-provider";
-
-const slots = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
-const days = ["SEG 24", "TER 25", "QUA 26", "QUI 27", "SEX 28"];
-const events = [
-  { day: 0, start: 1, span: 1, client: "Lívia Rocha", service: "Preventiva" },
-  { day: 1, start: 2, span: 2, client: "João Silva", service: "Instalação" },
-  { day: 1, start: 6, span: 1, client: "Carlos Lima", service: "Reparo" },
-  { day: 2, start: 1, span: 1, client: "Bia Ramos", service: "Orçamento" },
-  { day: 3, start: 4, span: 2, client: "Marina Costa", service: "Instalação" },
-  { day: 4, start: 2, span: 1, client: "Pedro Nunes", service: "Preventiva" },
+const demoEvents: CalendarEvent[] = [
+  { id: "1", day: 0, start: 1, span: 1, time: "09:00", client: "Lívia Rocha", service: "Preventiva" },
+  { id: "2", day: 1, start: 2, span: 2, time: "10:00", client: "João Silva", service: "Instalação" },
+  { id: "3", day: 1, start: 6, span: 1, time: "14:00", client: "Carlos Lima", service: "Reparo" },
+  { id: "4", day: 2, start: 1, span: 1, time: "09:00", client: "Bia Ramos", service: "Orçamento" },
+  { id: "5", day: 3, start: 4, span: 2, time: "12:00", client: "Marina Costa", service: "Instalação" },
+  { id: "6", day: 4, start: 2, span: 1, time: "10:00", client: "Pedro Nunes", service: "Preventiva" },
 ];
 
-export default function AgendaPage() {
-  const { niche } = useNiche();
-  return (
-    <>
-      <PageHeader eyebrow="Operação · Agenda" title="Agenda da semana" description={`Horários, equipe e ${niche.resource.toLowerCase()} em uma visão.`} />
-      <div className="toolbar"><div className="date-switcher"><button aria-label="Semana anterior"><ChevronLeft size={17} /></button><strong>24–28 de agosto, 2026</strong><button aria-label="Próxima semana"><ChevronRight size={17} /></button></div><div><button className="chip active"><Rows3 size={15} /> Semana</button><button className="chip"><List size={15} /> Lista</button><button className="chip"><Filter size={15} /> Filtrar</button></div></div>
-      <section className="calendar-panel">
-        <div className="calendar-head"><span>GMT−3</span>{days.map((day, index) => <strong key={day} className={index === 1 ? "today" : ""}>{day}</strong>)}</div>
-        <div className="calendar-body">
-          <div className="calendar-times">{slots.map((slot) => <span key={slot}>{slot}</span>)}</div>
-          {days.map((day, dayIndex) => <div className="calendar-day" key={day}>{slots.map((slot) => <button aria-label={`Criar às ${slot} em ${day}`} key={slot} />)}{events.filter((event) => event.day === dayIndex).map((event) => <article key={`${event.client}-${event.start}`} style={{ top: `calc(${event.start} * 54px + 4px)`, height: `calc(${event.span} * 54px - 8px)` }}><span>{slots[event.start]}</span><strong>{event.client}</strong><small>{niche.services[event.start % niche.services.length]?.name ?? event.service}</small></article>)}</div>)}
-          <div className="calendar-now"><span>10:24</span></div>
-        </div>
-      </section>
-    </>
-  );
+export default async function AgendaPage() {
+  const workspace = await getCurrentWorkspace();
+  let events = demoEvents;
+  let customers = [{ id: "demo", label: "Cliente demonstrativo" }];
+  let services = [{ id: "demo", label: "Serviço demonstrativo" }];
+  if (workspace?.organizationId) {
+    const supabase = await createClient();
+    const [{ data: appointmentData, error }, { data: customerData }, { data: serviceData }] = await Promise.all([
+      supabase.from("appointments").select("id, starts_at, ends_at, customers(name), services(name)").eq("organization_id", workspace.organizationId).gte("starts_at", "2026-08-24T00:00:00-03:00").lt("starts_at", "2026-08-29T00:00:00-03:00").neq("status", "cancelled").order("starts_at"),
+      supabase.from("customers").select("id, name").eq("organization_id", workspace.organizationId).eq("active", true).order("name"),
+      supabase.from("services").select("id, name").eq("organization_id", workspace.organizationId).eq("active", true).order("name"),
+    ]);
+    if (error) throw new Error(error.message);
+    customers = (customerData ?? []).map((item) => ({ id: item.id, label: item.name }));
+    services = (serviceData ?? []).map((item) => ({ id: item.id, label: item.name }));
+    events = (appointmentData ?? []).map((item) => {
+      const start = new Date(item.starts_at);
+      const end = new Date(item.ends_at);
+      const day = (start.getDay() + 6) % 7;
+      const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", hour12: false, timeZone: "America/Sao_Paulo" }).format(start));
+      const time = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(start);
+      return { id: item.id, day, start: Math.max(0, hour - 8), span: Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 3_600_000)), time, client: relationName(item.customers), service: relationName(item.services) };
+    });
+  }
+  return <AppointmentManager events={events} customers={customers} services={services} demo={!workspace?.organizationId} />;
 }
 
+function relationName(value: { name: string } | { name: string }[] | null) {
+  if (!value) return "Sem identificação";
+  return Array.isArray(value) ? value[0]?.name ?? "Sem identificação" : value.name;
+}

@@ -21,6 +21,7 @@ import {
 import { useState } from "react";
 import { KronosMark } from "./kronos-mark";
 import { useNiche } from "./niche-provider";
+import { signOut } from "@/app/auth-actions";
 
 const navigation = [
   { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard },
@@ -33,7 +34,7 @@ const navigation = [
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, fullName = "Ana Martins", role = "Administradora", demo = false }: { children: React.ReactNode; fullName?: string; role?: string; demo?: boolean }) {
   const pathname = usePathname();
   const { companyName, niche } = useNiche();
   const [open, setOpen] = useState(false);
@@ -67,11 +68,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div><strong>Kronos encontrou 3 melhorias</strong><small>Baseadas na sua agenda.</small></div>
           <Link href="/insights" aria-label="Ver insights">→</Link>
         </div>
-        <div className="sidebar__user">
-          <span>AM</span>
-          <div><strong>Ana Martins</strong><small>Administradora</small></div>
-          <ChevronDown size={15} />
-        </div>
+        <form action={signOut} className="sidebar__user">
+          <span>{fullName.split(" ").slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
+          <div><strong>{fullName}</strong><small>{demo ? "Modo demonstração" : role}</small></div>
+          {demo ? <ChevronDown size={15} /> : <button title="Sair" aria-label="Sair da conta">Sair</button>}
+        </form>
       </aside>
       {open ? <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Fechar menu" /> : null}
       <div className="app-main">
@@ -85,4 +86,3 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
