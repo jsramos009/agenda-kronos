@@ -45,6 +45,7 @@ export function CustomerManager({ customers, demo }: { customers: CustomerRow[];
         <summary className="button button--primary">Novo cliente</summary>
         <form action={demo ? undefined : action} onSubmit={createDemoCustomer} className="inline-create-form">
           <label className="field"><span>Nome</span><input name="name" required minLength={2} /></label><label className="field"><span>Telefone</span><input name="phone" type="tel" /></label><label className="field"><span>E-mail</span><input name="email" type="email" /></label><button className="button button--primary" disabled={pending}>{pending ? "Salvando…" : "Salvar cliente"}</button>
+          <label className="check-field consent-field"><input name="consent" type="checkbox" /> O cliente autorizou o uso deste contato para comunicações da empresa.</label>
           {(demoMessage || state.message) ? <span className={`action-feedback action-feedback--${state.status === "error" ? "error" : "success"}`}>{demoMessage || state.message}</span> : null}
         </form>
       </details>

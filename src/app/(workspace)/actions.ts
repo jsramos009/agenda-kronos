@@ -19,7 +19,13 @@ export async function createCustomer(_: ActionState, formData: FormData): Promis
     name: z.string().trim().min(2).max(160),
     phone: z.string().trim().min(8).max(30).optional().or(z.literal("")),
     email: z.string().trim().email().optional().or(z.literal("")),
-  }).safeParse({ name: formData.get("name"), phone: formData.get("phone"), email: formData.get("email") });
+    consent: z.boolean(),
+  }).safeParse({
+    name: formData.get("name"),
+    phone: formData.get("phone"),
+    email: formData.get("email"),
+    consent: formData.get("consent") === "on",
+  });
   if (!parsed.success || (!parsed.data.phone && !parsed.data.email)) return { status: "error", message: "Informe nome e ao menos um contato válido." };
 
   try {
@@ -29,7 +35,7 @@ export async function createCustomer(_: ActionState, formData: FormData): Promis
       name: parsed.data.name,
       phone: parsed.data.phone || null,
       email: parsed.data.email || null,
-      consent_at: new Date().toISOString(),
+      consent_at: parsed.data.consent ? new Date().toISOString() : null,
     });
     if (error) throw error;
     revalidatePath("/clientes");
@@ -92,36 +98,23 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
     const { workspace, supabase } = await tenantContext();
     const { data: claimData } = await supabase.auth.getClaims();
     const userId = claimData?.claims?.sub;
-    const [{ data: service, error: serviceError }, { data: member }, { data: stage }] = await Promise.all([
-      supabase.from("services").select("duration_minutes").eq("id", parsed.data.serviceId).single(),
+    const [{ data: member }, { data: stage }] = await Promise.all([
       supabase.from("organization_members").select("id").eq("organization_id", workspace.organizationId).eq("user_id", userId ?? "").maybeSingle(),
       supabase.from("workflow_stages").select("id").eq("organization_id", workspace.organizationId).order("position").limit(1).maybeSingle(),
     ]);
-    if (serviceError || !service) throw new Error("Serviço não encontrado.");
-    const endsAt = new Date(parsed.data.startsAt.getTime() + service.duration_minutes * 60_000);
-    const { data: appointment, error } = await supabase.from("appointments").insert({
-      organization_id: workspace.organizationId,
-      customer_id: parsed.data.customerId,
-      service_id: parsed.data.serviceId,
-      professional_member_id: member?.id ?? null,
-      starts_at: parsed.data.startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      notes: parsed.data.notes ?? null,
-      created_by: userId ?? null,
-    }).select("id").single();
+    const { error } = await supabase.rpc("create_appointment_with_work_item", {
+      target_organization_id: workspace.organizationId,
+      target_customer_id: parsed.data.customerId,
+      target_service_id: parsed.data.serviceId,
+      target_professional_member_id: member?.id ?? null,
+      target_stage_id: stage?.id ?? null,
+      target_starts_at: parsed.data.startsAt.toISOString(),
+      target_notes: parsed.data.notes ?? null,
+    });
 
     if (error) {
       if (error.code === "23P01") throw new Error("Esse profissional já possui um atendimento no horário escolhido.");
       throw error;
-    }
-    if (stage && appointment) {
-      const { error: workItemError } = await supabase.from("work_items").insert({
-        organization_id: workspace.organizationId,
-        appointment_id: appointment.id,
-        stage_id: stage.id,
-        assignee_member_id: member?.id ?? null,
-      });
-      if (workItemError) throw workItemError;
     }
     revalidatePath("/agenda");
     revalidatePath("/atendimentos");
@@ -136,15 +129,12 @@ export async function moveWorkItem(workItemId: string, stageId: string): Promise
   if (!z.string().uuid().safeParse(workItemId).success || !z.string().uuid().safeParse(stageId).success) return { status: "error", message: "Movimentação inválida." };
   try {
     const { workspace, supabase } = await tenantContext();
-    const [{ data: stage, error: stageError }, { data: item, error: itemError }] = await Promise.all([
-      supabase.from("workflow_stages").select("canonical_status").eq("id", stageId).eq("organization_id", workspace.organizationId).single(),
-      supabase.from("work_items").select("appointment_id").eq("id", workItemId).eq("organization_id", workspace.organizationId).single(),
-    ]);
-    if (stageError || itemError || !stage || !item) throw new Error("Etapa ou atendimento não encontrado.");
-    const { error } = await supabase.from("work_items").update({ stage_id: stageId, entered_stage_at: new Date().toISOString() }).eq("id", workItemId);
+    const { error } = await supabase.rpc("move_work_item", {
+      target_organization_id: workspace.organizationId,
+      target_work_item_id: workItemId,
+      target_stage_id: stageId,
+    });
     if (error) throw error;
-    const { error: appointmentError } = await supabase.from("appointments").update({ status: stage.canonical_status }).eq("id", item.appointment_id);
-    if (appointmentError) throw appointmentError;
     revalidatePath("/atendimentos");
     revalidatePath("/dashboard");
     return { status: "success", message: "Etapa atualizada." };
@@ -174,11 +164,16 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
   if (!parsed.success) return { status: "error", message: "Revise o nome da empresa e o nicho." };
   try {
     const { workspace, supabase } = await tenantContext(); const theme = niches[parsed.data.nicheId].theme;
-    const [{ error: organizationError }, { error: themeError }] = await Promise.all([
-      supabase.from("organizations").update({ name: parsed.data.companyName, niche_id: parsed.data.nicheId }).eq("id", workspace.organizationId),
-      supabase.from("organization_themes").update({ primary_color: theme.primary, accent_color: theme.accent, soft_color: theme.soft, line_color: theme.line }).eq("organization_id", workspace.organizationId),
-    ]);
-    if (organizationError || themeError) throw organizationError ?? themeError;
+    const { error } = await supabase.rpc("update_organization_identity", {
+      target_organization_id: workspace.organizationId,
+      target_name: parsed.data.companyName,
+      target_niche_id: parsed.data.nicheId,
+      target_primary_color: theme.primary,
+      target_accent_color: theme.accent,
+      target_soft_color: theme.soft,
+      target_line_color: theme.line,
+    });
+    if (error) throw error;
     revalidatePath("/", "layout"); return { status: "success", message: "Configurações salvas." };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao salvar configurações." }; }
 }

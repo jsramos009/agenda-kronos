@@ -1,5 +1,5 @@
 begin;
-select plan(15);
+select plan(20);
 
 select has_table('public', 'organizations', 'organizations exists');
 select has_table('public', 'organization_members', 'organization_members exists');
@@ -62,6 +62,48 @@ select is(
   (select count(*)::integer from public.niche_templates where active),
   6,
   'six active niche templates are seeded'
+);
+
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'appointments' and policyname = 'appointments_insert_operator'
+  ) and not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'appointments' and policyname = 'appointments_insert_member'
+  ),
+  'appointment writes use role-aware policies'
+);
+
+select ok(
+  exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.appointments'::regclass and conname = 'appointments_customer_same_org'
+  ),
+  'appointment customer references cannot cross organizations'
+);
+
+select ok(
+  exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname = 'has_organization_role' and p.prosecdef
+      and p.proconfig @> array['search_path=""']
+  ),
+  'role helper is a hardened security definer'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'private.has_organization_role(uuid, public.organization_role[])',
+    'EXECUTE'
+  ),
+  'anonymous users cannot execute the role helper'
+);
+
+select ok(
+  not ('image/svg+xml' = any((select allowed_mime_types from storage.buckets where id = 'organization-logos'))),
+  'logo bucket rejects active SVG content'
 );
 
 select * from finish();

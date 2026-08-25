@@ -38,7 +38,7 @@ export async function signUp(formData: FormData) {
     },
   });
 
-  if (error) redirect(`/criar-conta?erro=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/criar-conta?erro=${encodeURIComponent("Não foi possível criar a conta. Revise os dados ou tente entrar.")}`);
   if (data.session) redirect("/onboarding");
   redirect("/entrar?mensagem=Confira+seu+e-mail+para+confirmar+a+conta.");
 }

@@ -20,6 +20,17 @@ export async function completeOnboarding(formData: FormData): Promise<Onboarding
     nicheId: formData.get("nicheId"),
   });
   if (!parsed.success) return { ok: false, message: "Revise os dados da empresa antes de continuar." };
+
+  const logo = formData.get("logo");
+  const logoExtensions: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+  };
+  if (logo instanceof File && logo.size > 0) {
+    if (logo.size > 5 * 1024 * 1024) return { ok: false, message: "O logo deve ter no máximo 5 MB." };
+    if (!logoExtensions[logo.type]) return { ok: false, message: "Envie o logo em PNG, JPG ou WebP." };
+  }
   if (!isSupabaseConfigured) return { ok: true, demo: true };
 
   const supabase = await createClient();
@@ -48,20 +59,21 @@ export async function completeOnboarding(formData: FormData): Promise<Onboarding
 
   if (error) return { ok: false, message: `Não foi possível criar o espaço: ${error.message}` };
 
-  const logo = formData.get("logo");
   if (logo instanceof File && logo.size > 0) {
-    if (logo.size > 5 * 1024 * 1024) return { ok: false, message: "O logo deve ter no máximo 5 MB." };
-    const extension = logo.name.split(".").pop()?.toLowerCase() || "png";
+    const extension = logoExtensions[logo.type];
     const logoPath = `${organizationId}/logo.${extension}`;
     const { error: uploadError } = await supabase.storage
       .from("organization-logos")
       .upload(logoPath, logo, { contentType: logo.type, upsert: true });
 
     if (!uploadError) {
-      await supabase
+      const { error: themeError } = await supabase
         .from("organization_themes")
         .update({ logo_path: logoPath })
         .eq("organization_id", organizationId);
+      if (themeError) console.error("Falha ao vincular o logo à organização.");
+    } else {
+      console.error("Falha ao enviar o logo da organização.");
     }
   }
 
