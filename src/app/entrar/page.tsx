@@ -15,7 +15,7 @@ export default async function EntrarPage({ searchParams }: { searchParams: Promi
         {params.erro ? <div className="form-message form-message--error">{params.erro}</div> : null}
         {params.mensagem ? <div className="form-message form-message--success">{params.mensagem}</div> : null}
         {!isSupabaseConfigured ? <div className="form-message">Modo local: configure o arquivo <code>.env.local</code> para ativar contas reais.</div> : null}
-        <form action={signIn} className="auth-form">
+        <form action={signIn} className="auth-form auth-form--login">
           <label className="field"><span>E-mail</span><input name="email" type="email" autoComplete="email" required /></label>
           <label className="field"><span>Senha</span><input name="password" type="password" autoComplete="current-password" minLength={8} required /></label>
           <button className="button button--primary" disabled={!isSupabaseConfigured}>Entrar</button>

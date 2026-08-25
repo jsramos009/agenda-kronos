@@ -33,6 +33,12 @@ npm run dev
 
 Abra `http://localhost:3000`. Sem variáveis do Supabase, a interface usa dados demonstrativos e não grava alterações.
 
+## Conectar ao Supabase hospedado
+
+O projeto remoto `auidksphelvjffwzzpre` já está indicado em `.env.example`. Copie o arquivo para `.env.local`, preencha `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` com a chave publicável exibida em **Project Settings > API** e autorize este repositório no Supabase para aplicar as migrações de `supabase/migrations`.
+
+Enquanto a chave publicável não estiver preenchida, a aplicação permanece no modo de demonstração e não tenta consultar o banco local desligado.
+
 ## Rodar com banco local
 
 Requer Docker Desktop.

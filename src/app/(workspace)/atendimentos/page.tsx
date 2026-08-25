@@ -20,7 +20,6 @@ export default async function AtendimentosPage() {
     cards = (itemData ?? []).map((item, index) => {
       const appointment = firstRelation(item.appointments);
       const enteredAt = new Date(item.entered_stage_at);
-      const ageHours = Math.max(0, Math.floor((Date.now() - enteredAt.getTime()) / 3_600_000));
       return {
         id: item.id,
         stageId: item.stage_id,
@@ -29,7 +28,7 @@ export default async function AtendimentosPage() {
         service: relationName(appointment?.services),
         time: appointment?.starts_at ? new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(new Date(appointment.starts_at)) : "Prazo",
         assignee: relationName(item.organization_members),
-        aging: ageHours < 24 ? `${ageHours}h na etapa` : `${Math.floor(ageHours / 24)}d na etapa`,
+        aging: `Desde ${new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "America/Sao_Paulo" }).format(enteredAt)}`,
       };
     });
   }
