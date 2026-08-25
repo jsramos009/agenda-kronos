@@ -82,3 +82,16 @@ A versão pode ser publicada como demonstração visual e funcional. Para libera
 3. executar `supabase test db` e os advisors de segurança/desempenho;
 4. configurar `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` e `NEXT_PUBLIC_SITE_URL` na Vercel;
 5. configurar no Supabase as URLs de callback do domínio publicado.
+
+## Publicação Vercel
+
+- projeto: `agenda-kronos`;
+- ambiente: produção;
+- estado: `READY`;
+- domínio: https://agenda-kronos.vercel.app;
+- resposta da homepage: HTTP 200;
+- framework detectado: Next.js;
+- erros de runtime na primeira hora: nenhum;
+- cabeçalhos de proteção confirmados no domínio: HSTS, `nosniff`, bloqueio de iframe, política de referência e política de permissões.
+
+A publicação está em modo demonstração porque as variáveis públicas do Supabase ainda não foram autorizadas no ambiente de produção.
