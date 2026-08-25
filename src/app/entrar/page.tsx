@@ -20,6 +20,7 @@ export default async function EntrarPage({ searchParams }: { searchParams: Promi
           <label className="field"><span>Senha</span><input name="password" type="password" autoComplete="current-password" minLength={8} required /></label>
           <button className="button button--primary" disabled={!isSupabaseConfigured}>Entrar</button>
         </form>
+        <Link className="auth-help-link" href="/recuperar-senha">Esqueci minha senha</Link>
         <footer>Ainda não tem uma conta? <Link href="/criar-conta">Criar conta</Link></footer>
         {!isSupabaseConfigured ? <Link className="button button--secondary" href="/onboarding">Explorar demonstração</Link> : null}
       </section>

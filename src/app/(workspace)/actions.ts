@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
+import { niches } from "@/lib/niches";
 
 export type ActionState = { status: "idle" | "success" | "error"; message: string };
 
@@ -150,4 +151,50 @@ export async function moveWorkItem(workItemId: string, stageId: string): Promise
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Falha ao mover atendimento." };
   }
+}
+
+export async function inviteTeamMember(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = z.object({ email: z.string().trim().email(), role: z.enum(["admin", "reception", "professional", "analyst"]) }).safeParse({ email: formData.get("email"), role: formData.get("role") });
+  if (!parsed.success) return { status: "error", message: "Informe um e-mail e um papel válidos." };
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { data: claims } = await supabase.auth.getClaims();
+    const actorId = claims?.claims?.sub;
+    if (!actorId) throw new Error("Sessão expirada.");
+    const { error } = await supabase.from("organization_invitations").insert({ organization_id: workspace.organizationId, email: parsed.data.email, role: parsed.data.role, invited_by: actorId });
+    if (error?.code === "23505") return { status: "error", message: "Já existe um convite pendente para este e-mail." };
+    if (error) throw error;
+    revalidatePath("/conta");
+    return { status: "success", message: "Convite registrado para envio." };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao registrar convite." }; }
+}
+
+export async function saveOrganizationSettings(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = z.object({ companyName: z.string().trim().min(2).max(120), nicheId: z.enum(["climatizacao", "odontologia", "advocacia", "assistencia-tecnica", "manicure", "salao"]) }).safeParse({ companyName: formData.get("companyName"), nicheId: formData.get("nicheId") });
+  if (!parsed.success) return { status: "error", message: "Revise o nome da empresa e o nicho." };
+  try {
+    const { workspace, supabase } = await tenantContext(); const theme = niches[parsed.data.nicheId].theme;
+    const [{ error: organizationError }, { error: themeError }] = await Promise.all([
+      supabase.from("organizations").update({ name: parsed.data.companyName, niche_id: parsed.data.nicheId }).eq("id", workspace.organizationId),
+      supabase.from("organization_themes").update({ primary_color: theme.primary, accent_color: theme.accent, soft_color: theme.soft, line_color: theme.line }).eq("organization_id", workspace.organizationId),
+    ]);
+    if (organizationError || themeError) throw organizationError ?? themeError;
+    revalidatePath("/", "layout"); return { status: "success", message: "Configurações salvas." };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao salvar configurações." }; }
+}
+
+export async function updateRecommendation(recommendationId: string, status: "applied" | "dismissed" | "snoozed"): Promise<ActionState> {
+  if (!z.string().uuid().safeParse(recommendationId).success) return { status: "error", message: "Recomendação inválida." };
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const values = status === "applied" ? { status, applied_at: new Date().toISOString(), snoozed_until: null } : status === "snoozed" ? { status, snoozed_until: new Date(Date.now() + 86_400_000).toISOString(), applied_at: null } : { status, snoozed_until: null, applied_at: null };
+    const { error } = await supabase.from("recommendations").update(values).eq("id", recommendationId).eq("organization_id", workspace.organizationId);
+    if (error) throw error; revalidatePath("/insights"); return { status: "success", message: status === "applied" ? "Insight aplicado." : status === "snoozed" ? "Lembrete agendado para amanhã." : "Insight dispensado." };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao atualizar insight." }; }
+}
+
+export async function createKnowledgeArticle(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = z.object({ title: z.string().trim().min(3).max(180), type: z.enum(["process", "manual", "checklist", "faq", "template"]), content: z.string().trim().min(10).max(10_000) }).safeParse({ title: formData.get("title"), type: formData.get("type"), content: formData.get("content") });
+  if (!parsed.success) return { status: "error", message: "Informe título, tipo e conteúdo." };
+  try { const { workspace, supabase } = await tenantContext(); const { data: claims } = await supabase.auth.getClaims(); const { error } = await supabase.from("knowledge_articles").insert({ organization_id: workspace.organizationId, title: parsed.data.title, type: parsed.data.type, body: { text: parsed.data.content }, status: "draft", created_by: claims?.claims?.sub ?? null }); if (error) throw error; revalidatePath("/conhecimento"); return { status: "success", message: "Artigo criado como rascunho." }; } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao criar artigo." }; }
 }

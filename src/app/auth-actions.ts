@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const emailSchema = z.string().trim().email("Informe um e-mail válido.");
 
@@ -46,4 +47,25 @@ export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/entrar");
+}
+
+export async function requestPasswordReset(formData: FormData) {
+  const email = emailSchema.safeParse(formData.get("email"));
+  if (!email.success) redirect("/recuperar-senha?erro=Informe+um+e-mail+válido.");
+  if (!isSupabaseConfigured) redirect("/recuperar-senha?mensagem=Fluxo+de+recuperação+pronto.+Conecte+o+Supabase+para+enviar+o+e-mail.");
+  const supabase = await createClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const { error } = await supabase.auth.resetPasswordForEmail(email.data, { redirectTo: `${siteUrl}/auth/confirm?next=/redefinir-senha` });
+  if (error) redirect(`/recuperar-senha?erro=${encodeURIComponent("Não foi possível enviar o link. Tente novamente.")}`);
+  redirect("/recuperar-senha?mensagem=Se+o+e-mail+estiver+cadastrado,+você+receberá+um+link+de+recuperação.");
+}
+
+export async function updatePassword(formData: FormData) {
+  const password = z.string().min(8).regex(/[A-Za-z]/).regex(/\d/).safeParse(formData.get("password"));
+  const confirmation = formData.get("confirmation");
+  if (!password.success || password.data !== confirmation) redirect("/redefinir-senha?erro=Use+8+caracteres,+letras+e+números,+e+repita+a+mesma+senha.");
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: password.data });
+  if (error) redirect(`/redefinir-senha?erro=${encodeURIComponent("Não foi possível atualizar a senha. Solicite um novo link.")}`);
+  redirect("/entrar?mensagem=Senha+atualizada.+Entre+com+os+novos+dados.");
 }

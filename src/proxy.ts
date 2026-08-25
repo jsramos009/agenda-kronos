@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const publicPaths = ["/", "/entrar", "/criar-conta", "/auth", "/agendar"];
+const publicPaths = ["/", "/entrar", "/criar-conta", "/recuperar-senha", "/faq", "/privacidade", "/termos", "/auth", "/agendar"];
 
 export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
       : { error: new Error("Link de confirmação inválido.") };
 
   const url = request.nextUrl.clone();
-  url.pathname = result.error ? "/entrar" : "/onboarding";
+  const next = request.nextUrl.searchParams.get("next");
+  url.pathname = result.error ? "/entrar" : next?.startsWith("/") ? next : type === "recovery" ? "/redefinir-senha" : "/onboarding";
   url.search = result.error ? "?erro=Não+foi+possível+confirmar+a+conta." : "";
   return NextResponse.redirect(url);
 }

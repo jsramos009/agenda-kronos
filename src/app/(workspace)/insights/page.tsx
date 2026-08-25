@@ -1,20 +1,13 @@
-"use client";
+import { InsightsManager, type InsightRow } from "@/components/insights-manager";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentWorkspace } from "@/lib/workspace";
+import { niches } from "@/lib/niches";
 
-import { ArrowRight, Check, Clock3, Sparkles, X } from "lucide-react";
-import { useNiche } from "@/components/niche-provider";
-import { PageHeader } from "@/components/ui";
-
-export default function InsightsPage() {
-  const { niche } = useNiche();
-  return (
-    <>
-      <PageHeader eyebrow="Inteligência · Sob seu controle" title="Insights" description={`Sugestões explicadas a partir da sua operação e do modelo de ${niche.label.toLowerCase()}.`} action={null} />
-      <div className="tabs"><button className="active">Novos <span>3</span></button><button>Aplicados</button><button>Dispensados</button></div>
-      <section className="insights-list">
-        {niche.insights.map((insight, index) => <article key={insight.title}><div className="insight-index"><Sparkles size={18} /><span>0{index + 1}</span></div><div className="insight-copy"><p>{index === 0 ? "OPORTUNIDADE" : index === 1 ? "PADRÃO IDENTIFICADO" : "AJUSTE SUGERIDO"}</p><h2>{insight.title}</h2><span>{insight.evidence}</span><div><small><strong>Impacto</strong>{insight.impact}</small><small><strong>Origem</strong>{index === 0 ? "Sua agenda" : `Modelo de ${niche.label}`}</small><small><strong>Esforço</strong>{index === 2 ? "10 minutos" : "2 minutos"}</small></div></div><aside><button className="button button--primary">Revisar e aplicar <ArrowRight size={16} /></button><button className="button button--ghost"><Clock3 size={15} /> Lembrar depois</button><button className="dismiss"><X size={14} /> Dispensar</button></aside></article>)}
-      </section>
-      <p className="insight-note"><Check size={15} /> Nenhuma mudança é aplicada sem sua confirmação.</p>
-    </>
-  );
+export default async function InsightsPage() {
+  const workspace = await getCurrentWorkspace(); const niche = niches[workspace?.nicheId ?? "climatizacao"];
+  let rows: InsightRow[] = niche.insights.map((item, index) => ({ id: `demo-${index}`, title: item.title, evidence: item.evidence, impact: item.impact, origin: index === 0 ? "Sua agenda" : `Modelo de ${niche.label}`, effort: index === 2 ? "10 minutos" : "2 minutos", status: "new" }));
+  if (workspace?.organizationId) { const supabase = await createClient(); const { data, error } = await supabase.from("recommendations").select("id, title, evidence, impact, origin, status").eq("organization_id", workspace.organizationId).order("created_at", { ascending: false }); if (error) throw new Error(error.message); rows = (data ?? []).map((item) => ({ id: item.id, title: item.title, evidence: textFromJson(item.evidence), impact: textFromJson(item.impact), origin: item.origin, effort: "2 minutos", status: item.status as InsightRow["status"] })); }
+  return <InsightsManager initialInsights={rows} demo={workspace?.demo ?? true} />;
 }
 
+function textFromJson(value: unknown) { if (typeof value === "string") return value; if (value && typeof value === "object") { const record = value as Record<string, unknown>; return String(record.text ?? record.message ?? Object.values(record)[0] ?? "Baseado nos dados da operação."); } return "Baseado nos dados da operação."; }

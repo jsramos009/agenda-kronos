@@ -15,6 +15,15 @@ Aplicação Next.js e Supabase para organizar agenda, clientes, serviços, atend
 - `supabase`: configuração local, migrações PostgreSQL, RLS, dados iniciais e testes pgTAP.
 - `brand`: fontes visuais originais, tokens e regras de uso.
 
+## Rotas entregues
+
+- Site público: `/`, `/faq`, `/privacidade` e `/termos`.
+- Acesso: `/entrar`, `/criar-conta`, `/recuperar-senha` e `/redefinir-senha`.
+- Operação: `/dashboard`, `/agenda`, `/clientes`, `/servicos`, `/atendimentos`, `/insights`, `/conhecimento` e `/relatorios`.
+- Administração: `/configuracoes`, `/conta`, `/ajuda` e `/busca`.
+
+As áreas operacionais possuem busca, filtros e estados interativos em demonstração. Quando o Supabase está configurado, os fluxos compatíveis passam a persistir no banco com isolamento por organização.
+
 ## Nichos da primeira versão
 
 1. Climatização
@@ -54,7 +63,7 @@ Copie `.env.example` para `.env.local` e use a `API_URL` e a `PUBLISHABLE_KEY` e
 npm run dev
 ```
 
-As migrações criam seis modelos de nicho, isolamento multiempresa por RLS, autenticação, organização, clientes, serviços, disponibilidade, agenda, recursos, kanban, histórico, notificações, conhecimento, recomendações e auditoria.
+As migrações criam seis modelos de nicho, isolamento multiempresa por RLS, autenticação, organização, convites de equipe, clientes, serviços, disponibilidade, agenda, recursos, kanban, histórico, notificações, conhecimento, recomendações e auditoria.
 
 ## Verificação
 
