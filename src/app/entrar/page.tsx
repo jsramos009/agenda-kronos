@@ -7,7 +7,7 @@ export default async function EntrarPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   return (
     <main className="auth-page">
-      <section className="auth-card">
+      <section className="auth-card auth-card--login">
         <KronosMark />
         <p className="eyebrow">Acesso ao espaço</p>
         <h1>Organize o tempo. Cuide do trabalho.</h1>

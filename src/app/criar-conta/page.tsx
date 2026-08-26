@@ -7,7 +7,7 @@ export default async function CriarContaPage({ searchParams }: { searchParams: P
   const { erro } = await searchParams;
   return (
     <main className="auth-page">
-      <section className="auth-card">
+      <section className="auth-card auth-card--signup">
         <KronosMark />
         <p className="eyebrow">Comece pela sua operação</p>
         <h1>Um sistema que aprende o seu jeito de atender.</h1>
