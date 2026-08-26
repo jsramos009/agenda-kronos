@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { niches } from "@/lib/niches";
 
 export type ActionState = { status: "idle" | "success" | "error"; message: string };
 
@@ -125,6 +124,67 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
   }
 }
 
+export async function rescheduleAppointment(appointmentId: string, startsAt: string): Promise<ActionState> {
+  const parsed = z.object({
+    appointmentId: z.string().uuid(),
+    startsAt: z.coerce.date(),
+  }).safeParse({ appointmentId, startsAt });
+  if (!parsed.success) return { status: "error", message: "Escolha uma data e um horário válidos." };
+
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { error } = await supabase.rpc("reschedule_appointment", {
+      target_organization_id: workspace.organizationId,
+      target_appointment_id: parsed.data.appointmentId,
+      target_starts_at: parsed.data.startsAt.toISOString(),
+    });
+    if (error?.code === "23P01") return { status: "error", message: "Esse horário já está ocupado." };
+    if (error) throw error;
+    revalidatePath("/agenda");
+    revalidatePath("/dashboard");
+    return { status: "success", message: "Agendamento remarcado." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Falha ao remarcar o agendamento." };
+  }
+}
+
+export async function updateAppointmentNotes(appointmentId: string, notes: string): Promise<ActionState> {
+  const parsed = z.object({ appointmentId: z.string().uuid(), notes: z.string().trim().max(1000) }).safeParse({ appointmentId, notes });
+  if (!parsed.success) return { status: "error", message: "As observações devem ter até 1.000 caracteres." };
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { error } = await supabase.rpc("update_appointment_details", {
+      target_organization_id: workspace.organizationId,
+      target_appointment_id: parsed.data.appointmentId,
+      target_notes: parsed.data.notes,
+    });
+    if (error) throw error;
+    revalidatePath("/agenda");
+    return { status: "success", message: "Detalhes atualizados." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Falha ao atualizar o agendamento." };
+  }
+}
+
+export async function setMemberAccess(memberId: string, active: boolean): Promise<ActionState> {
+  if (!z.string().uuid().safeParse(memberId).success) return { status: "error", message: "Pessoa inválida." };
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { error } = await supabase.rpc("set_organization_member_access", {
+      target_organization_id: workspace.organizationId,
+      target_member_id: memberId,
+      target_active: active,
+    });
+    if (error?.code === "42501") return { status: "error", message: "O proprietário e o seu próprio acesso não podem ser suspensos." };
+    if (error) throw error;
+    revalidatePath("/admin");
+    revalidatePath("/conta");
+    return { status: "success", message: active ? "Acesso reativado." : "Acesso suspenso." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Falha ao alterar o acesso." };
+  }
+}
+
 export async function moveWorkItem(workItemId: string, stageId: string): Promise<ActionState> {
   if (!z.string().uuid().safeParse(workItemId).success || !z.string().uuid().safeParse(stageId).success) return { status: "error", message: "Movimentação inválida." };
   try {
@@ -160,18 +220,52 @@ export async function inviteTeamMember(_: ActionState, formData: FormData): Prom
 }
 
 export async function saveOrganizationSettings(_: ActionState, formData: FormData): Promise<ActionState> {
-  const parsed = z.object({ companyName: z.string().trim().min(2).max(120), nicheId: z.enum(["climatizacao", "odontologia", "advocacia", "assistencia-tecnica", "manicure", "salao"]) }).safeParse({ companyName: formData.get("companyName"), nicheId: formData.get("nicheId") });
-  if (!parsed.success) return { status: "error", message: "Revise o nome da empresa e o nicho." };
+  const color = z.string().regex(/^#[0-9a-f]{6}$/i);
+  const parsed = z.object({
+    companyName: z.string().trim().min(2).max(120),
+    nicheId: z.enum(["climatizacao", "odontologia", "advocacia", "assistencia-tecnica", "manicure", "salao"]),
+    primaryColor: color,
+    accentColor: color,
+    softColor: color,
+    lineColor: color,
+    agendaStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    agendaEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    bookingNotice: z.coerce.number().int().min(0).max(10080),
+    cancellationNotice: z.coerce.number().int().min(0).max(43200),
+  }).safeParse({
+    companyName: formData.get("companyName"),
+    nicheId: formData.get("nicheId"),
+    primaryColor: formData.get("primaryColor"),
+    accentColor: formData.get("accentColor"),
+    softColor: formData.get("softColor"),
+    lineColor: formData.get("lineColor"),
+    agendaStart: formData.get("agendaStart"),
+    agendaEnd: formData.get("agendaEnd"),
+    bookingNotice: formData.get("bookingNotice"),
+    cancellationNotice: formData.get("cancellationNotice"),
+  });
+  if (!parsed.success) return { status: "error", message: "Revise os dados, horários e cores antes de salvar." };
   try {
-    const { workspace, supabase } = await tenantContext(); const theme = niches[parsed.data.nicheId].theme;
-    const { error } = await supabase.rpc("update_organization_identity", {
+    const { workspace, supabase } = await tenantContext();
+    const preferences = {
+      agenda: { startsAt: parsed.data.agendaStart, endsAt: parsed.data.agendaEnd },
+      notifications: {
+        reminder24: formData.get("reminder24") === "true",
+        reminder2: formData.get("reminder2") === "true",
+        dailyDigest: formData.get("dailyDigest") === "true",
+      },
+    };
+    const { error } = await supabase.rpc("update_organization_settings", {
       target_organization_id: workspace.organizationId,
       target_name: parsed.data.companyName,
       target_niche_id: parsed.data.nicheId,
-      target_primary_color: theme.primary,
-      target_accent_color: theme.accent,
-      target_soft_color: theme.soft,
-      target_line_color: theme.line,
+      target_primary_color: parsed.data.primaryColor,
+      target_accent_color: parsed.data.accentColor,
+      target_soft_color: parsed.data.softColor,
+      target_line_color: parsed.data.lineColor,
+      target_booking_notice_minutes: parsed.data.bookingNotice,
+      target_cancellation_notice_minutes: parsed.data.cancellationNotice,
+      target_preferences: preferences,
     });
     if (error) throw error;
     revalidatePath("/", "layout"); return { status: "success", message: "Configurações salvas." };

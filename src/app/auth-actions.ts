@@ -49,6 +49,21 @@ export async function signOut() {
   redirect("/entrar");
 }
 
+export async function signInWithGoogle() {
+  if (!isSupabaseConfigured) redirect("/entrar?erro=Conecte+o+Supabase+para+usar+o+Google.");
+  const supabase = await createClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${siteUrl}/auth/confirm?next=/dashboard`,
+      queryParams: { access_type: "offline", prompt: "select_account" },
+    },
+  });
+  if (error || !data.url) redirect("/entrar?erro=O+login+com+Google+ainda+não+está+disponível.");
+  redirect(data.url);
+}
+
 export async function requestPasswordReset(formData: FormData) {
   const email = emailSchema.safeParse(formData.get("email"));
   if (!email.success) redirect("/recuperar-senha?erro=Informe+um+e-mail+válido.");

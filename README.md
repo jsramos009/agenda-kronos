@@ -20,7 +20,7 @@ Aplicação Next.js e Supabase para organizar agenda, clientes, serviços, atend
 - Site público: `/`, `/faq`, `/privacidade` e `/termos`.
 - Acesso: `/entrar`, `/criar-conta`, `/recuperar-senha` e `/redefinir-senha`.
 - Operação: `/dashboard`, `/agenda`, `/clientes`, `/servicos`, `/atendimentos`, `/insights`, `/conhecimento` e `/relatorios`.
-- Administração: `/configuracoes`, `/conta`, `/ajuda` e `/busca`.
+- Administração: `/configuracoes`, `/conta`, `/admin`, `/ajuda` e `/busca`.
 
 As áreas operacionais possuem busca, filtros e estados interativos em demonstração. Quando o Supabase está configurado, os fluxos compatíveis passam a persistir no banco com isolamento por organização.
 
@@ -40,7 +40,7 @@ npm install
 npm run dev
 ```
 
-Abra `http://localhost:3000`. Sem variáveis do Supabase, a interface usa dados demonstrativos e não grava alterações.
+Abra `http://localhost:3000`. Use `/demonstracao` para entrar no painel demonstrativo, mesmo quando o ambiente já estiver apontado para o Supabase remoto.
 
 ## Conectar ao Supabase hospedado
 

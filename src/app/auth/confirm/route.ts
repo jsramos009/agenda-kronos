@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const url = request.nextUrl.clone();
   const next = request.nextUrl.searchParams.get("next");
-  const safeNext = next === "/redefinir-senha" ? next : null;
+  const safeNext = next === "/redefinir-senha" || next === "/dashboard" || next === "/onboarding" ? next : null;
   url.pathname = result.error ? "/entrar" : safeNext ?? (type === "recovery" ? "/redefinir-senha" : "/onboarding");
   url.search = result.error ? "?erro=Não+foi+possível+confirmar+a+conta." : "";
   return NextResponse.redirect(url);
