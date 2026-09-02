@@ -30,7 +30,6 @@ import {
 import { useEffect, useState } from "react";
 import { KronosMark } from "./kronos-mark";
 import { useNiche } from "./niche-provider";
-import { signOut } from "@/app/auth-actions";
 import { switchWorkspace } from "@/app/workspace-actions";
 import type { WorkspaceSummary } from "@/lib/workspace";
 
@@ -112,7 +111,7 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
           <Link href="/conta" onClick={() => setAccountMenuOpen(false)}><UserCog size={16} /><span><strong>Minha conta</strong><small>Perfil, equipe e permissões</small></span></Link>
           <Link href="/configuracoes" onClick={() => setAccountMenuOpen(false)}><Building2 size={16} /><span><strong>Configurar espaço</strong><small>Marca, agenda e automações</small></span></Link>
           <Link href="/" onClick={() => setAccountMenuOpen(false)}><House size={16} /><span><strong>Voltar para o site</strong><small>Ir para a página inicial</small></span></Link>
-          <form action={signOut}><button className="account-menu__logout"><LogOut size={16} /><span><strong>{demo ? "Ir para o login" : "Sair e trocar de conta"}</strong><small>{demo ? "Encerrar a demonstração" : "Encerrar esta sessão com segurança"}</small></span></button></form>
+          <form action="/auth/logout" method="post"><button className="account-menu__logout"><LogOut size={16} /><span><strong>{demo ? "Ir para o login" : "Sair e trocar de conta"}</strong><small>{demo ? "Encerrar a demonstração" : "Encerrar esta sessão com segurança"}</small></span></button></form>
         </div> : null}
         </div>
       </aside>

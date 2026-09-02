@@ -53,13 +53,6 @@ export async function signUp(formData: FormData) {
   redirect("/entrar?mensagem=Confira+seu+e-mail+para+confirmar+a+conta.");
 }
 
-export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut({ scope: "local" });
-  await clearDemoState();
-  redirect("/entrar?mensagem=Você+saiu+da+sua+conta+com+segurança.");
-}
-
 export async function signInWithGoogle() {
   if (!isSupabaseConfigured) redirect("/entrar?erro=Conecte+o+Supabase+para+usar+o+Google.");
   const supabase = await createClient();

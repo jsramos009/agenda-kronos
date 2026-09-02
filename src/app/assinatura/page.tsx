@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BadgeCheck, CreditCard, ExternalLink, LockKeyhole } from "lucide-react";
 import { KronosMark } from "@/components/kronos-mark";
-import { signOut } from "@/app/auth-actions";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { requestSubscriptionReview } from "./actions";
@@ -58,7 +57,7 @@ export default async function AssinaturaPage({
         </form>
         <footer>
           <Link href="/onboarding?novo=1">Revisar configuração</Link>
-          <form action={signOut}><button>Sair da conta</button></form>
+          <form action="/auth/logout" method="post"><button>Sair da conta</button></form>
         </footer>
       </section>
     </main>
