@@ -29,8 +29,9 @@ export async function GET(request: NextRequest) {
   url.search = result.error ? "?erro=Não+foi+possível+confirmar+a+conta." : "";
   const response = NextResponse.redirect(url);
   if (!result.error) {
-    response.cookies.delete("kronos_demo");
-    response.cookies.delete("kronos_workspace");
+    const expiredCookie = { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 };
+    response.cookies.set("kronos_demo", "", expiredCookie);
+    response.cookies.set("kronos_workspace", "", expiredCookie);
   }
   return response;
 }

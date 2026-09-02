@@ -78,8 +78,15 @@ export async function signInWithGoogle() {
 
 async function clearDemoState() {
   const cookieStore = await cookies();
-  cookieStore.delete("kronos_demo");
-  cookieStore.delete("kronos_workspace");
+  const expiredCookie = {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  };
+  cookieStore.set("kronos_demo", "", expiredCookie);
+  cookieStore.set("kronos_workspace", "", expiredCookie);
 }
 
 export async function requestPasswordReset(formData: FormData) {

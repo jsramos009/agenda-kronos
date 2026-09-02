@@ -29,7 +29,7 @@ export async function proxy(request: NextRequest) {
   );
   const isDemo = request.cookies.get("kronos_demo")?.value === "1";
 
-  if (data?.claims && isDemo) response.cookies.delete("kronos_demo");
+  if (data?.claims && isDemo) response.cookies.set("kronos_demo", "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
 
   if (!data?.claims && !isPublic && !isDemo) {
     const url = request.nextUrl.clone();
