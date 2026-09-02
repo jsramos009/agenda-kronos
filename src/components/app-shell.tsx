@@ -14,6 +14,7 @@ import {
   Lightbulb,
   LogOut,
   CircleHelp,
+  House,
   UserRound,
   Menu,
   Search,
@@ -102,15 +103,16 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
           <Link href="/insights" aria-label="Ver insights">→</Link>
         </div>
         <div className="account-control">
-        <button type="button" className="sidebar__user" aria-expanded={accountMenuOpen} onClick={() => { setAccountMenuOpen((value) => !value); setWorkspaceMenuOpen(false); }}>
+        <button type="button" className="sidebar__user" aria-label="Abrir opções da conta" aria-haspopup="menu" aria-expanded={accountMenuOpen} onClick={() => { setAccountMenuOpen((value) => !value); setWorkspaceMenuOpen(false); }}>
           <span>{fullName.split(" ").slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
           <div><strong>{fullName}</strong><small>{demo ? "Modo demonstração" : role}</small></div>
           <ChevronDown size={15} />
         </button>
-        {accountMenuOpen ? <div className="account-menu">
+        {accountMenuOpen ? <div className="account-menu" role="menu" aria-label="Opções da conta">
           <Link href="/conta" onClick={() => setAccountMenuOpen(false)}><UserCog size={16} /><span><strong>Minha conta</strong><small>Perfil, equipe e permissões</small></span></Link>
           <Link href="/configuracoes" onClick={() => setAccountMenuOpen(false)}><Building2 size={16} /><span><strong>Configurar espaço</strong><small>Marca, agenda e automações</small></span></Link>
-          {demo ? <Link href="/entrar" onClick={() => setAccountMenuOpen(false)}><LogOut size={16} /><span><strong>Ir para o login</strong><small>Entrar em uma conta real</small></span></Link> : <form action={signOut}><button><LogOut size={16} /><span><strong>Sair da conta</strong><small>Encerrar esta sessão</small></span></button></form>}
+          <Link href="/" onClick={() => setAccountMenuOpen(false)}><House size={16} /><span><strong>Voltar para o site</strong><small>Ir para a página inicial</small></span></Link>
+          <form action={signOut}><button className="account-menu__logout"><LogOut size={16} /><span><strong>{demo ? "Ir para o login" : "Sair e trocar de conta"}</strong><small>{demo ? "Encerrar a demonstração" : "Encerrar esta sessão com segurança"}</small></span></button></form>
         </div> : null}
         </div>
       </aside>

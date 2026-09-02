@@ -398,6 +398,8 @@ body { font-size: 16px; line-height: 1.55; }
 .account-menu a, .account-menu form > button { width: 100%; min-height: 58px; padding: 9px; border: 0; border-radius: 7px; background: transparent; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
 .account-menu a:hover, .account-menu form > button:hover { background: var(--brand-paper); }
 .account-menu a > span, .account-menu button > span { display: flex; flex-direction: column; }.account-menu strong { font-size: 12px; }.account-menu small { color: var(--neutral-500); font-size: 10px; }
+.account-menu form { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--neutral-200); }.account-menu .account-menu__logout { color: #9e372f; }.account-menu .account-menu__logout:hover { background: #fbefec; }.account-menu .account-menu__logout small { color: #8a5b56; }
+.auth-site-link { margin-top: 4px; color: var(--neutral-600); display: block; font-size: 11px; font-weight: 700; text-align: center; text-decoration: underline; text-decoration-color: var(--neutral-300); text-underline-offset: 4px; }.auth-site-link:hover { color: var(--brand-umber); text-decoration-color: currentColor; }
 
 .topbar { height: 74px; }
 .global-search { width: min(720px, 62vw); height: 44px; }.global-search input, .inline-search input { font-size: 14px; }

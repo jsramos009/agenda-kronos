@@ -55,9 +55,9 @@ export async function signUp(formData: FormData) {
 
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: "local" });
   await clearDemoState();
-  redirect("/entrar");
+  redirect("/entrar?mensagem=Você+saiu+da+sua+conta+com+segurança.");
 }
 
 export async function signInWithGoogle() {

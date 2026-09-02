@@ -27,6 +27,7 @@ export default async function EntrarPage({ searchParams }: { searchParams: Promi
         <Link className="auth-help-link" href="/recuperar-senha">Esqueci minha senha</Link>
         <footer>Ainda não tem uma conta? <Link href="/criar-conta">Criar conta</Link></footer>
         <Link className="button button--secondary" href="/demonstracao">Explorar demonstração</Link>
+        <Link className="auth-site-link" href="/">Voltar para o site</Link>
       </section>
     </main>
   );
