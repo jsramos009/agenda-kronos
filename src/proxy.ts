@@ -29,6 +29,8 @@ export async function proxy(request: NextRequest) {
   );
   const isDemo = request.cookies.get("kronos_demo")?.value === "1";
 
+  if (data?.claims && isDemo) response.cookies.delete("kronos_demo");
+
   if (!data?.claims && !isPublic && !isDemo) {
     const url = request.nextUrl.clone();
     url.pathname = "/entrar";

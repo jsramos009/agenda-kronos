@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { niches } from "@/lib/niches";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 
@@ -221,8 +222,12 @@ export async function inviteTeamMember(_: ActionState, formData: FormData): Prom
 
 export async function saveOrganizationSettings(_: ActionState, formData: FormData): Promise<ActionState> {
   const color = z.string().regex(/^#[0-9a-f]{6}$/i);
+  const parseJsonArray = (value: FormDataEntryValue | null) => {
+    try { return JSON.parse(String(value ?? "[]")); } catch { return null; }
+  };
   const parsed = z.object({
     companyName: z.string().trim().min(2).max(120),
+    description: z.string().trim().max(500),
     nicheId: z.enum(["climatizacao", "odontologia", "advocacia", "assistencia-tecnica", "manicure", "salao"]),
     primaryColor: color,
     accentColor: color,
@@ -232,8 +237,11 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
     agendaEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     bookingNotice: z.coerce.number().int().min(0).max(10080),
     cancellationNotice: z.coerce.number().int().min(0).max(43200),
+    selectedServices: z.array(z.string().trim().min(2).max(120)).min(1).max(12),
+    workflowNames: z.array(z.string().trim().min(2).max(80)).min(2).max(10),
   }).safeParse({
     companyName: formData.get("companyName"),
+    description: formData.get("description"),
     nicheId: formData.get("nicheId"),
     primaryColor: formData.get("primaryColor"),
     accentColor: formData.get("accentColor"),
@@ -243,8 +251,19 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
     agendaEnd: formData.get("agendaEnd"),
     bookingNotice: formData.get("bookingNotice"),
     cancellationNotice: formData.get("cancellationNotice"),
+    selectedServices: parseJsonArray(formData.get("selectedServices")),
+    workflowNames: parseJsonArray(formData.get("workflowNames")),
   });
   if (!parsed.success) return { status: "error", message: "Revise os dados, horários e cores antes de salvar." };
+  const allowedServices = new Set(niches[parsed.data.nicheId].services.map((service) => service.name));
+  if (!parsed.data.selectedServices.every((service) => allowedServices.has(service))) {
+    return { status: "error", message: "Selecione apenas modelos disponíveis para o nicho atual." };
+  }
+  const logo = formData.get("logo");
+  const logoExtensions: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+  if (logo instanceof File && logo.size > 0 && (!logoExtensions[logo.type] || logo.size > 5 * 1024 * 1024)) {
+    return { status: "error", message: "Use um logo PNG, JPG ou WebP de até 5 MB." };
+  }
   try {
     const { workspace, supabase } = await tenantContext();
     const preferences = {
@@ -255,9 +274,10 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
         dailyDigest: formData.get("dailyDigest") === "true",
       },
     };
-    const { error } = await supabase.rpc("update_organization_settings", {
+    const { error } = await supabase.rpc("update_organization_settings_v2", {
       target_organization_id: workspace.organizationId,
       target_name: parsed.data.companyName,
+      target_description: parsed.data.description,
       target_niche_id: parsed.data.nicheId,
       target_primary_color: parsed.data.primaryColor,
       target_accent_color: parsed.data.accentColor,
@@ -268,8 +288,52 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
       target_preferences: preferences,
     });
     if (error) throw error;
+
+    if (logo instanceof File && logo.size > 0) {
+      const extension = logoExtensions[logo.type];
+      const logoPath = `${workspace.organizationId}/logo.${extension}`;
+      const { error: uploadError } = await supabase.storage.from("organization-logos").upload(logoPath, logo, { contentType: logo.type, upsert: true });
+      if (uploadError) throw uploadError;
+      const { error: themeError } = await supabase.from("organization_themes").update({ logo_path: logoPath }).eq("organization_id", workspace.organizationId);
+      if (themeError) throw themeError;
+    }
+
+    const serviceTemplates = niches[parsed.data.nicheId].services.filter((service) => parsed.data.selectedServices.includes(service.name));
+    const { error: disableServicesError } = await supabase.from("services").update({ active: false }).eq("organization_id", workspace.organizationId);
+    if (disableServicesError) throw disableServicesError;
+    const { error: servicesError } = await supabase.from("services").upsert(serviceTemplates.map((service) => ({
+      organization_id: workspace.organizationId,
+      name: service.name,
+      duration_minutes: durationToMinutes(service.duration),
+      price_cents: priceToCents(service.price),
+      active: true,
+      color: parsed.data.primaryColor,
+    })), { onConflict: "organization_id,name" });
+    if (servicesError) throw servicesError;
+
+    const { data: stages, error: stagesError } = await supabase.from("workflow_stages").select("id").eq("organization_id", workspace.organizationId).eq("active", true).order("position");
+    if (stagesError) throw stagesError;
+    const stageUpdates = (stages ?? []).slice(0, parsed.data.workflowNames.length).map((stage, index) => supabase.from("workflow_stages").update({ name: parsed.data.workflowNames[index] }).eq("id", stage.id).eq("organization_id", workspace.organizationId));
+    const stageResults = await Promise.all(stageUpdates);
+    const stageUpdateError = stageResults.find((result) => result.error)?.error;
+    if (stageUpdateError) throw stageUpdateError;
+
+    const { error: availabilityError } = await supabase.from("availability_rules").update({ starts_at: parsed.data.agendaStart, ends_at: parsed.data.agendaEnd }).eq("organization_id", workspace.organizationId).eq("active", true);
+    if (availabilityError) throw availabilityError;
     revalidatePath("/", "layout"); return { status: "success", message: "Configurações salvas." };
-  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao salvar configurações." }; }
+  } catch { return { status: "error", message: "Não foi possível salvar todas as configurações. Tente novamente." }; }
+}
+
+function durationToMinutes(duration: string) {
+  const hours = Number(duration.match(/(\d+)h/)?.[1] ?? 0);
+  const minutes = Number(duration.match(/(\d+)\s*min/)?.[1] ?? 0);
+  return Math.max(5, (hours * 60) + minutes);
+}
+
+function priceToCents(price: string) {
+  const match = price.match(/R\$\s*([\d.]+(?:,\d{1,2})?)/);
+  if (!match) return null;
+  return Math.round(Number(match[1].replace(/\./g, "").replace(",", ".")) * 100);
 }
 
 export async function updateRecommendation(recommendationId: string, status: "applied" | "dismissed" | "snoozed"): Promise<ActionState> {

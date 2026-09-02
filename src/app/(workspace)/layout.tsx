@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const workspace = await getCurrentWorkspace();
   if (!workspace) redirect("/onboarding");
+  if (!workspace.demo && workspace.subscriptionStatus !== "active") redirect("/assinatura");
   const workspaces = await getAvailableWorkspaces();
 
   return (

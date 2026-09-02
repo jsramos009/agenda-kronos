@@ -32,7 +32,7 @@ No Google Auth Platform, crie um cliente OAuth do tipo **Web application**. Adic
 No Supabase, abra **Authentication > Providers > Google**, habilite o provedor e informe o Client ID e Client Secret do Google. Em **URL Configuration**, permita:
 
 - `http://localhost:3000/auth/confirm`
-- `https://agenda-kronos.vercel.app/auth/confirm`
+- `https://agendakronos.vercel.app/auth/confirm`
 
 O aplicativo já chama `signInWithOAuth`, usa PKCE e troca o código em `/auth/confirm`. Sem as credenciais do Google, o botão aparece, mas o provedor recusará o início do fluxo.
 
