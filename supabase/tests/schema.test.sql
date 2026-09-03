@@ -1,5 +1,5 @@
 begin;
-select plan(28);
+select plan(31);
 
 select has_table('public', 'organizations', 'organizations exists');
 select has_table('public', 'organization_members', 'organization_members exists');
@@ -156,6 +156,30 @@ select ok(
     'EXECUTE'
   ),
   'subscription review uses an invoker wrapper around a narrow private helper'
+);
+
+select has_column('public', 'subscriptions', 'billing_cycle', 'subscription stores its billing cycle');
+select has_column('public', 'subscriptions', 'discount_percent', 'subscription stores its discount');
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'select_subscription_plan'
+      and not p.prosecdef
+  )
+  and has_function_privilege(
+    'authenticated',
+    'private.set_subscription_plan(uuid, text)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon',
+    'private.set_subscription_plan(uuid, text)',
+    'EXECUTE'
+  ),
+  'plan selection uses an invoker wrapper around a narrow private helper'
 );
 
 select * from finish();

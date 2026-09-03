@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BadgeCheck, CreditCard, ExternalLink, LockKeyhole } from "lucide-react";
+import { BadgeCheck, CalendarDays, CreditCard, ExternalLink, LockKeyhole } from "lucide-react";
 import { KronosMark } from "@/components/kronos-mark";
 import { createClient } from "@/lib/supabase/server";
+import { subscriptionPlans, type SubscriptionCycle } from "@/lib/subscription-plans";
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { requestSubscriptionReview } from "./actions";
-
-const planUrl = "https://invoice.infinitepay.io/plans/js_gabrielsilva/U80hrJJ1kZ";
+import { requestSubscriptionReview, startSubscriptionCheckout } from "./actions";
 
 export default async function AssinaturaPage({
   searchParams,
@@ -21,9 +20,11 @@ export default async function AssinaturaPage({
   const supabase = await createClient();
   const { data: subscription } = await supabase
     .from("subscriptions")
-    .select("confirmation_requested_at")
+    .select("confirmation_requested_at, billing_cycle")
     .eq("organization_id", workspace.organizationId)
     .maybeSingle();
+  const selectedCycle = (subscription?.billing_cycle === "annual" ? "annual" : "monthly") as SubscriptionCycle;
+  const selectedPlan = subscriptionPlans[selectedCycle];
 
   return (
     <main className="billing-page">
@@ -34,10 +35,28 @@ export default async function AssinaturaPage({
           <h1>Seu espaço está configurado.</h1>
           <p>Ative a assinatura para liberar a agenda de <strong>{workspace.companyName}</strong> e manter cada dado isolado no seu próprio ambiente.</p>
         </div>
-        <div className="billing-plan">
+        <div className="billing-plan-heading">
           <span><CreditCard size={20} /></span>
-          <div><strong>Plano Kronos</strong><small>Pagamento protegido pela InfinitePay</small></div>
+          <div><strong>Escolha seu plano</strong><small>Pagamento protegido pela InfinitePay</small></div>
           <BadgeCheck size={19} />
+        </div>
+        <div className="billing-plan-options">
+          {(Object.values(subscriptionPlans)).map((plan) => (
+            <article className={`billing-plan-option ${plan.cycle === selectedCycle ? "billing-plan-option--selected" : ""}`} key={plan.cycle}>
+              <header>
+                <span><CalendarDays size={18} /></span>
+                <em>{plan.badge}</em>
+              </header>
+              <strong>{plan.name}</strong>
+              <p>{plan.description}</p>
+              <form action={startSubscriptionCheckout}>
+                <input type="hidden" name="billingCycle" value={plan.cycle} />
+                <button className={plan.cycle === "annual" ? "button button--primary" : "button button--secondary"}>
+                  Escolher {plan.cycle === "annual" ? "anual" : "mensal"} <ExternalLink size={15} />
+                </button>
+              </form>
+            </article>
+          ))}
         </div>
         <ul className="billing-benefits">
           <li><LockKeyhole size={16} /> Workspace independente com proteção por tenant</li>
@@ -47,13 +66,10 @@ export default async function AssinaturaPage({
         {params.erro ? <div className="form-message form-message--error">{params.erro}</div> : null}
         {params.mensagem ? <div className="form-message form-message--success">{params.mensagem}</div> : null}
         {subscription?.confirmation_requested_at ? (
-          <div className="billing-pending"><span>Confirmação solicitada</span><p>Assim que o pagamento for confirmado, o painel será liberado.</p></div>
+          <div className="billing-pending"><span>Confirmação solicitada · {selectedPlan.name}</span><p>Assim que o pagamento for confirmado, o painel será liberado.</p></div>
         ) : null}
-        <a className="button button--primary billing-checkout" href={planUrl} target="_blank" rel="noreferrer">
-          Assinar com InfinitePay <ExternalLink size={17} />
-        </a>
         <form action={requestSubscriptionReview}>
-          <button className="button button--secondary">Já concluí a assinatura</button>
+          <button className="button button--secondary">Já concluí a assinatura do {selectedPlan.name.toLowerCase()}</button>
         </form>
         <footer>
           <Link href="/onboarding?novo=1">Revisar configuração</Link>
