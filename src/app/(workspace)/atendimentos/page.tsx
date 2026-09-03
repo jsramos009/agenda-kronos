@@ -13,7 +13,7 @@ export default async function AtendimentosPage() {
     const supabase = await createClient();
     const [{ data: stageData, error: stageError }, { data: itemData, error: itemError }] = await Promise.all([
       supabase.from("workflow_stages").select("id, name, color, position").eq("organization_id", workspace.organizationId).eq("visible", true).order("position"),
-      supabase.from("work_items").select("id, stage_id, entered_stage_at, appointments(id, starts_at, customers(name), services(name)), organization_members(display_name)").eq("organization_id", workspace.organizationId).order("entered_stage_at"),
+      supabase.from("work_items").select("id, stage_id, entered_stage_at, appointments(id, starts_at, customers:customers!appointments_customer_id_fkey(name), services:services!appointments_service_id_fkey(name)), organization_members(display_name)").eq("organization_id", workspace.organizationId).order("entered_stage_at"),
     ]);
     if (stageError || itemError) throw new Error(stageError?.message ?? itemError?.message);
     stages = (stageData ?? []).map((stage) => ({ id: stage.id, name: stage.name, color: stage.color ?? workspace.theme.primary, position: stage.position }));

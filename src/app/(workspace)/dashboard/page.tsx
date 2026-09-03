@@ -28,7 +28,7 @@ export default async function DashboardPage() {
     baseToday().eq("status", "in_progress"),
     baseToday().in("status", ["scheduled", "confirmed"]),
     baseToday().eq("status", "completed"),
-    supabase.from("appointments").select("id, starts_at, customers(name), services(name)").eq("organization_id", workspace.organizationId).gte("starts_at", new Date().toISOString()).not("status", "in", "(cancelled,no_show)").order("starts_at").limit(5),
+    supabase.from("appointments").select("id, starts_at, customers:customers!appointments_customer_id_fkey(name), services:services!appointments_service_id_fkey(name)").eq("organization_id", workspace.organizationId).gte("starts_at", new Date().toISOString()).not("status", "in", "(cancelled,no_show)").order("starts_at").limit(5),
     supabase.from("work_items").select("workflow_stages(name)").eq("organization_id", workspace.organizationId),
   ]);
   const firstError = [todayResult, inProgressResult, scheduledResult, completedResult, upcomingResult, stageResult].find((result) => result.error)?.error;

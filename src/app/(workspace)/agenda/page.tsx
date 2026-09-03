@@ -19,7 +19,7 @@ export default async function AgendaPage() {
   if (workspace?.organizationId) {
     const supabase = await createClient();
     const [{ data: appointmentData, error }, { data: customerData }, { data: serviceData }] = await Promise.all([
-      supabase.from("appointments").select("id, starts_at, ends_at, notes, customers(name, phone), services(name)").eq("organization_id", workspace.organizationId).gte("starts_at", "2026-08-24T00:00:00-03:00").lt("starts_at", "2026-08-29T00:00:00-03:00").neq("status", "cancelled").order("starts_at"),
+      supabase.from("appointments").select("id, starts_at, ends_at, notes, customers:customers!appointments_customer_id_fkey(name, phone), services:services!appointments_service_id_fkey(name)").eq("organization_id", workspace.organizationId).gte("starts_at", "2026-08-24T00:00:00-03:00").lt("starts_at", "2026-08-29T00:00:00-03:00").neq("status", "cancelled").order("starts_at"),
       supabase.from("customers").select("id, name").eq("organization_id", workspace.organizationId).eq("active", true).order("name"),
       supabase.from("services").select("id, name").eq("organization_id", workspace.organizationId).eq("active", true).order("name"),
     ]);
