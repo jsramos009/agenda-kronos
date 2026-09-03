@@ -1,18 +1,57 @@
-"use client";
+import { ReportsView, type ReportAppointment } from "@/components/reports-view";
+import { brazilTodayKey } from "@/lib/calendar-date";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentWorkspace } from "@/lib/workspace";
 
-import { useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Download } from "lucide-react";
-import { PageHeader } from "@/components/ui";
+export default async function RelatoriosPage() {
+  const workspace = await getCurrentWorkspace();
+  const today = brazilTodayKey();
+  if (!workspace?.organizationId) return <ReportsView appointments={demoAppointments(today)} professionals={["Ana Martins", "Marina Costa"]} today={today} demo />;
 
-const periods = {
-  "7d": { label: "Últimos 7 dias", occupancy: "79%", noShow: "5,6%", average: "1h18", revenue: "R$ 4,7 mil", delta: "2,4%", bars: [52, 68, 47, 76, 72, 84, 61] },
-  "30d": { label: "Últimos 30 dias", occupancy: "84%", noShow: "4,8%", average: "1h12", revenue: "R$ 18,4 mil", delta: "6,2%", bars: [42, 58, 47, 76, 68, 84, 62, 91, 73, 86, 78, 94] },
-  year: { label: "Este ano", occupancy: "81%", noShow: "5,1%", average: "1h15", revenue: "R$ 126,8 mil", delta: "8,7%", bars: [58, 61, 67, 72, 69, 77, 81, 79, 84, 86, 82, 91] },
-};
-type Period = keyof typeof periods;
+  const supabase = await createClient();
+  const yearStart = `${today.slice(0, 4)}-01-01T00:00:00-03:00`;
+  const [appointmentsResult, professionalsResult] = await Promise.all([
+    supabase
+      .from("appointments")
+      .select("starts_at, ends_at, status, professional:organization_members!appointments_professional_member_id_fkey(display_name), service:services!appointments_service_id_fkey(price_cents)")
+      .eq("organization_id", workspace.organizationId)
+      .gte("starts_at", yearStart)
+      .order("starts_at"),
+    supabase
+      .from("organization_members")
+      .select("display_name")
+      .eq("organization_id", workspace.organizationId)
+      .eq("active", true)
+      .order("display_name"),
+  ]);
+  const firstError = appointmentsResult.error ?? professionalsResult.error;
+  if (firstError) throw new Error(firstError.message);
 
-export default function RelatoriosPage() {
-  const [period, setPeriod] = useState<Period>("30d"); const [professional, setProfessional] = useState("Todos"); const data = periods[period];
-  const exportReport = () => { const rows = [["Período", data.label], ["Profissional", professional], ["Ocupação", data.occupancy], ["Taxa de faltas", data.noShow], ["Tempo médio", data.average], ["Receita estimada", data.revenue]]; const csv = rows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n"); const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv" })); link.download = `relatorio-kronos-${period}.csv`; link.click(); URL.revokeObjectURL(link.href); };
-  return <><PageHeader eyebrow="Análise · Operação" title="Relatórios" description="Veja onde o tempo rende mais e onde a operação pede ajuste." action={null} /><div className="toolbar"><div className="filter-pills"><button className={period === "7d" ? "active" : ""} onClick={() => setPeriod("7d")}>Últimos 7 dias</button><button className={period === "30d" ? "active" : ""} onClick={() => setPeriod("30d")}>Últimos 30 dias</button><button className={period === "year" ? "active" : ""} onClick={() => setPeriod("year")}>Este ano</button></div><div><label className="chip chip--select">Profissional <select value={professional} onChange={(event) => setProfessional(event.target.value)}><option>Todos</option><option>Ana Martins</option><option>Marina Costa</option></select></label><button className="chip" onClick={exportReport}><Download size={15} /> Exportar CSV</button></div></div><section className="report-stats"><article><span>Ocupação da agenda</span><strong>{data.occupancy}</strong><small className="positive"><ArrowUpRight size={14} /> {data.delta}</small></article><article><span>Taxa de faltas</span><strong>{data.noShow}</strong><small className="positive"><ArrowDownRight size={14} /> 1,4%</small></article><article><span>Tempo médio</span><strong>{data.average}</strong><small className="neutral">Estável</small></article><article><span>Receita estimada</span><strong>{data.revenue}</strong><small className="positive"><ArrowUpRight size={14} /> 9,1%</small></article></section><section className="reports-grid"><article className="panel report-chart"><div className="section-heading"><div><p className="eyebrow">OCUPAÇÃO</p><h2>Ritmo do período</h2></div><span>Média {data.occupancy}</span></div><div className="bar-chart">{data.bars.map((bar, index) => <div key={`${period}-${index}`}><i style={{ height: `${bar}%` }} /><span>{index % 2 ? "" : index + 1}</span></div>)}</div></article><article className="panel distribution"><div className="section-heading"><div><p className="eyebrow">DISTRIBUIÇÃO</p><h2>Tempo por etapa</h2></div></div>{[["Em atendimento", "42%"], ["Deslocamento/espera", "24%"], ["Aguardando confirmação", "18%"], ["Concluído/registro", "16%"]].map(([label, value], index) => <div key={label}><span><i style={{ opacity: 1 - index * 0.18 }} />{label}</span><strong>{value}</strong></div>)}</article></section><p className="report-footnote">Filtros ativos: {data.label} · {professional}. A exportação usa exatamente esta seleção.</p></>;
+  const appointments: ReportAppointment[] = (appointmentsResult.data ?? []).flatMap((item) => {
+    if (!item.starts_at || !item.ends_at) return [];
+    return [{
+      startsAt: item.starts_at,
+      endsAt: item.ends_at,
+      status: item.status,
+      professional: relation(item.professional)?.display_name ?? "Sem profissional",
+      priceCents: relation(item.service)?.price_cents ?? 0,
+    }];
+  });
+
+  const professionals = [...new Set((professionalsResult.data ?? []).map((item) => item.display_name))];
+  return <ReportsView appointments={appointments} professionals={professionals} today={today} />;
+}
+
+function relation<T>(value: T | T[] | null): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function demoAppointments(today: string): ReportAppointment[] {
+  return [0, 1, 2, 4, 6].map((distance, index) => {
+    const start = new Date(`${today}T${String(9 + index).padStart(2, "0")}:00:00-03:00`);
+    start.setDate(start.getDate() - distance);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    return { startsAt: start.toISOString(), endsAt: end.toISOString(), status: index === 3 ? "no_show" : index < 2 ? "completed" : "confirmed", professional: index % 2 ? "Marina Costa" : "Ana Martins", priceCents: 18000 };
+  });
 }

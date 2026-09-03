@@ -1,4 +1,5 @@
 import { DashboardView, type DashboardData } from "@/components/dashboard-view";
+import { brazilTodayKey, shiftDateKey } from "@/lib/calendar-date";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 
@@ -20,8 +21,9 @@ export default async function DashboardPage() {
   if (!workspace?.organizationId) return <DashboardView data={demo} />;
 
   const supabase = await createClient();
-  const todayStart = "2026-08-25T00:00:00-03:00";
-  const tomorrowStart = "2026-08-26T00:00:00-03:00";
+  const today = brazilTodayKey();
+  const todayStart = `${today}T00:00:00-03:00`;
+  const tomorrowStart = `${shiftDateKey(today, 1)}T00:00:00-03:00`;
   const baseToday = () => supabase.from("appointments").select("id", { count: "exact", head: true }).eq("organization_id", workspace.organizationId!).gte("starts_at", todayStart).lt("starts_at", tomorrowStart);
   const [todayResult, inProgressResult, scheduledResult, completedResult, upcomingResult, stageResult] = await Promise.all([
     baseToday().neq("status", "cancelled"),

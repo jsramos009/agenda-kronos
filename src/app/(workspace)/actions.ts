@@ -84,7 +84,7 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
   const parsed = z.object({
     customerId: z.string().uuid(),
     serviceId: z.string().uuid(),
-    startsAt: z.coerce.date(),
+    startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
     notes: z.string().trim().max(1000).optional(),
   }).safeParse({
     customerId: formData.get("customerId"),
@@ -93,6 +93,8 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
     notes: formData.get("notes") || undefined,
   });
   if (!parsed.success) return { status: "error", message: "Selecione cliente, serviço e horário válidos." };
+  const startsAt = new Date(`${parsed.data.startsAt}:00-03:00`);
+  if (Number.isNaN(startsAt.getTime())) return { status: "error", message: "Escolha uma data e um horário válidos." };
 
   try {
     const { workspace, supabase } = await tenantContext();
@@ -108,17 +110,18 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
       target_service_id: parsed.data.serviceId,
       target_professional_member_id: member?.id ?? null,
       target_stage_id: stage?.id ?? null,
-      target_starts_at: parsed.data.startsAt.toISOString(),
+      target_starts_at: startsAt.toISOString(),
       target_notes: parsed.data.notes ?? null,
     });
 
     if (error) {
       if (error.code === "23P01") throw new Error("Esse profissional já possui um atendimento no horário escolhido.");
-      throw error;
+      throw new Error(error.message);
     }
     revalidatePath("/agenda");
     revalidatePath("/atendimentos");
     revalidatePath("/dashboard");
+    revalidatePath("/relatorios");
     return { status: "success", message: "Agendamento criado sem conflito." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Falha ao criar agendamento." };
@@ -143,6 +146,7 @@ export async function rescheduleAppointment(appointmentId: string, startsAt: str
     if (error) throw error;
     revalidatePath("/agenda");
     revalidatePath("/dashboard");
+    revalidatePath("/relatorios");
     return { status: "success", message: "Agendamento remarcado." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Falha ao remarcar o agendamento." };
