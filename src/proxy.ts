@@ -4,6 +4,12 @@ import { NextResponse, type NextRequest } from "next/server";
 const publicPaths = ["/", "/entrar", "/criar-conta", "/recuperar-senha", "/faq", "/privacidade", "/termos", "/auth", "/agendar", "/demonstracao"];
 
 export async function proxy(request: NextRequest) {
+  // Provider callbacks authenticate with their own secret header in the route.
+  // They must not be redirected to the interactive Supabase login flow.
+  if (request.nextUrl.pathname.startsWith("/api/webhooks/asaas/")) {
+    return NextResponse.next();
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
