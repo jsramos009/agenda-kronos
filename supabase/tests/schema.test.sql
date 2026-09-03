@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(28);
 
 select has_table('public', 'organizations', 'organizations exists');
 select has_table('public', 'organization_members', 'organization_members exists');
@@ -134,6 +134,28 @@ select ok(
     'EXECUTE'
   ),
   'subscription bootstrap only exposes the narrow pending-subscription helper'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'request_subscription_review'
+      and not p.prosecdef
+  )
+  and has_function_privilege(
+    'authenticated',
+    'private.mark_subscription_review_requested(uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon',
+    'private.mark_subscription_review_requested(uuid)',
+    'EXECUTE'
+  ),
+  'subscription review uses an invoker wrapper around a narrow private helper'
 );
 
 select * from finish();
