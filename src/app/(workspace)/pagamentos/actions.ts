@@ -100,7 +100,6 @@ export async function connectAsaas(
           "PAYMENT_UPDATED",
           "PAYMENT_CONFIRMED",
           "PAYMENT_RECEIVED",
-          "PAYMENT_RECEIVED_IN_CASH",
           "PAYMENT_OVERDUE",
           "PAYMENT_REFUNDED",
           "PAYMENT_REFUND_IN_PROGRESS",
