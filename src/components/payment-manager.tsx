@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Landmark,
-  Link2,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -18,9 +17,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
-  connectAsaas,
   createAsaasCharge,
-  disconnectAsaas,
   syncAsaasCharge,
   type BillingActionState,
 } from "@/app/(workspace)/pagamentos/actions";
@@ -84,7 +81,6 @@ export function PaymentManager({
 }) {
   const router = useRouter();
   const createForm = useRef<HTMLFormElement>(null);
-  const [connectState, connectAction, connecting] = useActionState(connectAsaas, idle);
   const [chargeState, chargeAction, creating] = useActionState(createAsaasCharge, idle);
   const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id ?? "");
   const [document, setDocument] = useState(customers[0]?.document ?? "");
@@ -142,38 +138,22 @@ export function PaymentManager({
             : "A chave fica criptografada e é usada somente no servidor."}</p>
         </div>
         {connection.connected ? <div className="asaas-connection__status"><CheckCircle2 size={16} /> Baixa automática ativa</div> : null}
-        {connection.connected && canManage && !demo ? (
-          <details className="asaas-connection__menu">
-            <summary>Gerenciar</summary>
-            <form action={disconnectAsaas} onSubmit={(event) => {
-              if (!window.confirm("Desconectar o Asaas deste espaço? As cobranças já emitidas serão mantidas.")) event.preventDefault();
-            }}>
-              <button>Desconectar conta</button>
-            </form>
-          </details>
-        ) : null}
+        {canManage && !demo ? <Link className="button button--secondary" href="/configuracoes/integracoes">Configurar conexão</Link> : null}
       </section>
 
       {!connection.connected ? (
-        <section className="billing-connect-panel">
+        <section className="billing-connect-panel billing-connect-panel--redirect">
           <div className="billing-connect-panel__copy">
             <p className="eyebrow">Conexão por workspace</p>
             <h2>Uma conta Asaas para cada agenda</h2>
-            <p>Cole a chave da conta que receberá os pagamentos. Outros tenants e usuários sem permissão não conseguem visualizá-la.</p>
+            <p>Por segurança, chaves e webhooks são gerenciados em uma rota protegida nas configurações.</p>
             <ul>
               <li><ShieldCheck size={16} /> Credencial criptografada antes de chegar ao banco</li>
-              <li><Link2 size={16} /> Webhook criado automaticamente para conciliação</li>
+              <li><ShieldCheck size={16} /> Webhook criado automaticamente para conciliação</li>
               <li><Banknote size={16} /> Boleto vinculado ao cliente e ao agendamento</li>
             </ul>
           </div>
-          {canManage && !demo ? (
-            <form action={connectAction} className="billing-connect-form">
-              <label className="field"><span>Ambiente</span><select name="environment" defaultValue="sandbox"><option value="sandbox">Sandbox — testar integração</option><option value="production">Produção — emitir cobranças reais</option></select></label>
-              <label className="field"><span>Chave de API do Asaas</span><input name="apiKey" type="password" autoComplete="off" required placeholder="$aact_••••••••••••••••" /></label>
-              <button className="button button--primary" disabled={connecting}>{connecting ? <><LoaderCircle className="spin" size={16} /> Validando…</> : "Conectar e ativar webhook"}</button>
-              {connectState.message ? <p className={`action-feedback action-feedback--${connectState.status}`}>{connectState.message}</p> : null}
-            </form>
-          ) : <div className="billing-permission-note"><TriangleAlert size={18} /><p><strong>Acesso administrativo necessário</strong><span>Peça a um proprietário ou administrador para conectar a conta Asaas.</span></p></div>}
+          {canManage && !demo ? <Link className="button button--primary" href="/configuracoes/integracoes">Abrir integrações</Link> : <div className="billing-permission-note"><TriangleAlert size={18} /><p><strong>Acesso administrativo necessário</strong><span>Peça a um proprietário ou administrador para conectar a conta Asaas.</span></p></div>}
         </section>
       ) : null}
 

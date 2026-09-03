@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { niches, type NicheId } from "@/lib/niches";
@@ -38,7 +39,7 @@ export const demoWorkspace: Workspace = {
   demo: true,
 };
 
-export async function getCurrentWorkspace(): Promise<Workspace | null> {
+export const getCurrentWorkspace = cache(async function getCurrentWorkspace(): Promise<Workspace | null> {
   const cookieStore = await cookies();
   if (!isSupabaseConfigured) return demoWorkspace;
 
@@ -91,9 +92,9 @@ export async function getCurrentWorkspace(): Promise<Workspace | null> {
     subscriptionStatus: subscription?.status ?? "pending",
     demo: false,
   };
-}
+});
 
-export async function getAvailableWorkspaces(): Promise<WorkspaceSummary[]> {
+export const getAvailableWorkspaces = cache(async function getAvailableWorkspaces(): Promise<WorkspaceSummary[]> {
   const cookieStore = await cookies();
   if (!isSupabaseConfigured) {
     return [{
@@ -153,7 +154,7 @@ export async function getAvailableWorkspaces(): Promise<WorkspaceSummary[]> {
       displayName: membership.display_name,
     }];
   });
-}
+});
 
 function roleLabel(role: string) {
   return {

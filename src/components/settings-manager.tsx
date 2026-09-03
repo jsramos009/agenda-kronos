@@ -2,7 +2,8 @@
 
 import { FormEvent, useActionState, useEffect, useState } from "react";
 import Image from "next/image";
-import { Bell, Check, Clock3, Columns3, ImagePlus, LockKeyhole, Palette, RotateCcw, UsersRound } from "lucide-react";
+import Link from "next/link";
+import { Bell, Check, Clock3, Columns3, ImagePlus, LockKeyhole, Palette, Plug, RotateCcw, UsersRound } from "lucide-react";
 import { saveOrganizationSettings, type ActionState } from "@/app/(workspace)/actions";
 import { useNiche } from "@/components/niche-provider";
 import { PageHeader } from "@/components/ui";
@@ -64,7 +65,7 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
   return <>
     <PageHeader eyebrow="Sistema · Personalização" title="Configurações" description="Marca, agenda, equipe e regras de operação em uma sequência contínua." action={null} />
     <section className="settings-layout" style={previewStyle}>
-      <nav aria-label="Seções das configurações">{tabs.map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</nav>
+      <nav aria-label="Seções das configurações">{tabs.map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}{!demo ? <Link href="/configuracoes/integracoes" prefetch><Plug size={15} /> Integrações</Link> : null}</nav>
       <form action={demo ? undefined : action} onSubmit={saveDemo} className="settings-panel">
         <input type="hidden" name="companyName" value={companyName} />
         <input type="hidden" name="description" value={description} />
