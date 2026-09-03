@@ -81,14 +81,29 @@ export function PaymentManager({
 }) {
   const router = useRouter();
   const createForm = useRef<HTMLFormElement>(null);
+  const customerSearchInput = useRef<HTMLInputElement>(null);
   const [chargeState, chargeAction, creating] = useActionState(createAsaasCharge, idle);
-  const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id ?? "");
-  const [document, setDocument] = useState(customers[0]?.document ?? "");
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResultsOpen, setCustomerResultsOpen] = useState(false);
+  const [document, setDocument] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "open" | "paid" | "overdue">("all");
 
   const selectedCustomer = customers.find((item) => item.id === selectedCustomerId);
   const customerAppointments = appointments.filter((item) => item.customerId === selectedCustomerId);
+  const matchingCustomers = useMemo(() => {
+    const normalizedQuery = customerSearch.trim().toLocaleLowerCase("pt-BR");
+
+    return customers
+      .filter((customer) => {
+        if (!normalizedQuery) return true;
+        return `${customer.name} ${customer.email ?? ""} ${customer.phone ?? ""} ${customer.document ?? ""}`
+          .toLocaleLowerCase("pt-BR")
+          .includes(normalizedQuery);
+      })
+      .slice(0, 7);
+  }, [customerSearch, customers]);
   const filteredCharges = useMemo(() => charges.filter((charge) => {
     const matchesQuery = `${charge.customerName} ${charge.description}`
       .toLocaleLowerCase("pt-BR")
@@ -110,13 +125,25 @@ export function PaymentManager({
   }, [chargeState.status, router]);
 
   const selectCustomer = (id: string) => {
+    const customer = customers.find((item) => item.id === id);
+    customerSearchInput.current?.setCustomValidity("");
     setSelectedCustomerId(id);
-    setDocument(customers.find((item) => item.id === id)?.document ?? "");
+    setCustomerSearch(customer?.name ?? "");
+    setDocument(customer?.document ?? "");
+    setCustomerResultsOpen(false);
   };
 
   const stopDemo = (event: FormEvent<HTMLFormElement>) => {
-    if (!demo) return;
-    event.preventDefault();
+    if (demo) {
+      event.preventDefault();
+      return;
+    }
+
+    if (!selectedCustomerId) {
+      event.preventDefault();
+      customerSearchInput.current?.setCustomValidity("Selecione um cliente cadastrado na lista.");
+      customerSearchInput.current?.reportValidity();
+    }
   };
 
   return (
@@ -163,12 +190,67 @@ export function PaymentManager({
         <article><span><TriangleAlert size={18} /></span><small>Vencido</small><strong>{money(totals.overdue)}</strong><p>Cobranças que pedem acompanhamento</p></article>
       </section>
 
-      <div className="billing-workbench">
-        <section className="billing-issue-panel">
+      <section className="billing-issue-panel billing-issue-panel--wide">
           <header><span><CircleDollarSign size={19} /></span><div><h2>Gerar boleto</h2><p>A cobrança ficará registrada no histórico do cliente.</p></div></header>
           {!connection.connected ? <div className="billing-empty-lock"><Landmark size={23} /><strong>Conecte o Asaas para começar</strong><span>O formulário será liberado após validar a conta.</span></div> : !canCreate ? <div className="billing-empty-lock"><ShieldCheck size={23} /><strong>Perfil somente para consulta</strong><span>Administradores e recepção podem emitir cobranças.</span></div> : customers.length === 0 ? <div className="billing-empty-lock"><Banknote size={23} /><strong>Nenhum cliente cadastrado</strong><span>Cadastre um cliente antes de emitir o primeiro boleto.</span><Link className="button button--secondary" href="/clientes">Ir para clientes</Link></div> : (
             <form ref={createForm} action={demo ? undefined : chargeAction} onSubmit={stopDemo} className="billing-issue-form">
-              <label className="field field--wide"><span>Cliente</span><select name="customerId" value={selectedCustomerId} onChange={(event) => selectCustomer(event.target.value)} required>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.email ? ` — ${customer.email}` : ""}</option>)}</select></label>
+              <div
+                className="field field--wide billing-customer-search"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setCustomerResultsOpen(false);
+                }}
+              >
+                <span>Cliente</span>
+                <input type="hidden" name="customerId" value={selectedCustomerId} />
+                <div className="billing-customer-search__control">
+                  <Search size={18} aria-hidden="true" />
+                  <input
+                    ref={customerSearchInput}
+                    value={customerSearch}
+                    onChange={(event) => {
+                      event.currentTarget.setCustomValidity("");
+                      setCustomerSearch(event.target.value);
+                      setSelectedCustomerId("");
+                      setDocument("");
+                      setCustomerResultsOpen(true);
+                    }}
+                    onFocus={() => setCustomerResultsOpen(true)}
+                    role="combobox"
+                    aria-expanded={customerResultsOpen}
+                    aria-controls="billing-customer-results"
+                    aria-autocomplete="list"
+                    autoComplete="off"
+                    required
+                    placeholder="Digite nome, e-mail, telefone ou CPF/CNPJ"
+                  />
+                </div>
+                {customerResultsOpen ? (
+                  <div className="billing-customer-search__results" id="billing-customer-results" role="listbox">
+                    {matchingCustomers.length > 0 ? matchingCustomers.map((customer) => (
+                      <button
+                        key={customer.id}
+                        type="button"
+                        role="option"
+                        aria-selected={customer.id === selectedCustomerId}
+                        onClick={() => selectCustomer(customer.id)}
+                      >
+                        <span className="billing-customer-search__avatar">{customerInitials(customer.name)}</span>
+                        <span className="billing-customer-search__identity">
+                          <strong>{customer.name}</strong>
+                          <small>{customer.email || customer.phone || "Cliente cadastrado"}</small>
+                        </span>
+                        <span className="billing-customer-search__document">{customer.document || "Documento pendente"}</span>
+                      </button>
+                    )) : (
+                      <div className="billing-customer-search__empty">
+                        <strong>Nenhum cliente encontrado</strong>
+                        <span>Revise a busca ou cadastre o cliente primeiro.</span>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+                {selectedCustomer ? <small className="billing-customer-search__selected"><CheckCircle2 size={14} /> {selectedCustomer.name} selecionado</small> : null}
+              </div>
               <label className="field"><span>CPF ou CNPJ</span><input name="customerDocument" value={document} onChange={(event) => setDocument(event.target.value)} inputMode="numeric" required placeholder="Somente números" /></label>
               <label className="field"><span>Valor</span><div className="money-input"><span>R$</span><input name="amount" type="number" min="1" max="1000000" step="0.01" required placeholder="0,00" /></div></label>
               <label className="field"><span>Vencimento</span><input name="dueDate" type="date" min={today} required /></label>
@@ -178,8 +260,9 @@ export function PaymentManager({
               {chargeState.message ? <p className={`action-feedback action-feedback--${chargeState.status}`}>{chargeState.message}</p> : null}
             </form>
           )}
-        </section>
+      </section>
 
+      <div className="billing-lower-grid">
         <aside className="billing-flow-note">
           <p className="eyebrow">Como funciona</p>
           <ol>
@@ -188,16 +271,15 @@ export function PaymentManager({
             <li><span>3</span><div><strong>Pagamento conciliado</strong><p>O webhook atualiza pago, pendente ou vencido.</p></div></li>
           </ol>
         </aside>
+        <section className="billing-ledger">
+          <header>
+            <div><h2>Livro de cobranças</h2><p>{charges.length} {charges.length === 1 ? "cobrança registrada" : "cobranças registradas"}</p></div>
+            <label className="inline-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente ou descrição…" /></label>
+          </header>
+          <nav className="billing-filters" aria-label="Filtrar cobranças">{(["all", "open", "paid", "overdue"] as const).map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{filterLabel(item)}</button>)}</nav>
+          {filteredCharges.length === 0 ? <div className="billing-ledger__empty"><Banknote size={25} /><strong>Nenhuma cobrança neste filtro</strong><span>Os boletos emitidos aparecerão aqui com a situação atualizada.</span></div> : <div className="billing-table-wrap"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Vencimento</th><th>Situação</th><th>Valor</th><th aria-label="Ações" /></tr></thead><tbody>{filteredCharges.map((charge) => <tr key={charge.id}><td><strong>{charge.customerName}</strong><small>{charge.appointmentLabel || "Cobrança avulsa"}</small></td><td>{charge.description}</td><td>{dateLabel(charge.dueDate)}</td><td><span className={`billing-status billing-status--${statusCategory(charge.status)}`}>{statusLabel(charge.status)}</span></td><td><strong>{money(charge.amountCents)}</strong>{charge.paidAt ? <small>Baixa em {dateLabel(charge.paidAt)}</small> : null}</td><td><div className="billing-row-actions">{charge.bankSlipUrl || charge.invoiceUrl ? <a href={charge.bankSlipUrl || charge.invoiceUrl || "#"} target="_blank" rel="noreferrer">Abrir <ArrowUpRight size={14} /></a> : null}{!demo ? <form action={syncAsaasCharge}><input type="hidden" name="chargeId" value={charge.id} /><button title="Atualizar situação" aria-label={`Atualizar cobrança de ${charge.customerName}`}><RefreshCw size={14} /></button></form> : null}</div></td></tr>)}</tbody></table></div>}
+        </section>
       </div>
-
-      <section className="billing-ledger">
-        <header>
-          <div><h2>Livro de cobranças</h2><p>{charges.length} {charges.length === 1 ? "cobrança registrada" : "cobranças registradas"}</p></div>
-          <label className="inline-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente ou descrição…" /></label>
-        </header>
-        <nav className="billing-filters" aria-label="Filtrar cobranças">{(["all", "open", "paid", "overdue"] as const).map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{filterLabel(item)}</button>)}</nav>
-        {filteredCharges.length === 0 ? <div className="billing-ledger__empty"><Banknote size={25} /><strong>Nenhuma cobrança neste filtro</strong><span>Os boletos emitidos aparecerão aqui com a situação atualizada.</span></div> : <div className="billing-table-wrap"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Vencimento</th><th>Situação</th><th>Valor</th><th aria-label="Ações" /></tr></thead><tbody>{filteredCharges.map((charge) => <tr key={charge.id}><td><strong>{charge.customerName}</strong><small>{charge.appointmentLabel || "Cobrança avulsa"}</small></td><td>{charge.description}</td><td>{dateLabel(charge.dueDate)}</td><td><span className={`billing-status billing-status--${statusCategory(charge.status)}`}>{statusLabel(charge.status)}</span></td><td><strong>{money(charge.amountCents)}</strong>{charge.paidAt ? <small>Baixa em {dateLabel(charge.paidAt)}</small> : null}</td><td><div className="billing-row-actions">{charge.bankSlipUrl || charge.invoiceUrl ? <a href={charge.bankSlipUrl || charge.invoiceUrl || "#"} target="_blank" rel="noreferrer">Abrir <ArrowUpRight size={14} /></a> : null}{!demo ? <form action={syncAsaasCharge}><input type="hidden" name="chargeId" value={charge.id} /><button title="Atualizar situação" aria-label={`Atualizar cobrança de ${charge.customerName}`}><RefreshCw size={14} /></button></form> : null}</div></td></tr>)}</tbody></table></div>}
-      </section>
     </>
   );
 }
@@ -238,4 +320,14 @@ function money(cents: number) {
 function dateLabel(value: string) {
   const date = value.length === 10 ? new Date(`${value}T12:00:00-03:00`) : new Date(value);
   return new Intl.DateTimeFormat("pt-BR").format(date);
+}
+
+function customerInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toLocaleUpperCase("pt-BR");
 }
