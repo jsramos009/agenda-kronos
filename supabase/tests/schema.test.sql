@@ -1,5 +1,5 @@
 begin;
-select plan(26);
+select plan(27);
 
 select has_table('public', 'organizations', 'organizations exists');
 select has_table('public', 'organization_members', 'organization_members exists');
@@ -119,6 +119,21 @@ select ok(
 select ok(
   not ('image/svg+xml' = any((select allowed_mime_types from storage.buckets where id = 'organization-logos'))),
   'logo bucket rejects active SVG content'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.subscriptions', 'INSERT')
+  and has_function_privilege(
+    'authenticated',
+    'private.ensure_pending_subscription(uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon',
+    'private.ensure_pending_subscription(uuid)',
+    'EXECUTE'
+  ),
+  'subscription bootstrap only exposes the narrow pending-subscription helper'
 );
 
 select * from finish();
