@@ -27,6 +27,7 @@ import {
   Plus,
   ReceiptText,
   X,
+  Crown,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { KronosMark } from "./kronos-mark";
@@ -54,9 +55,10 @@ type AppShellProps = {
   demo?: boolean;
   activeWorkspaceId?: string | null;
   workspaces?: WorkspaceSummary[];
+  platformAdmin?: boolean;
 };
 
-export function AppShell({ children, fullName = "Ana Martins", role = "Administradora", roleKey = "admin", demo = false, activeWorkspaceId = null, workspaces = [] }: AppShellProps) {
+export function AppShell({ children, fullName = "Ana Martins", role = "Administradora", roleKey = "admin", demo = false, activeWorkspaceId = null, workspaces = [], platformAdmin = false }: AppShellProps) {
   const pathname = usePathname();
   const { companyName, niche } = useNiche();
   const [open, setOpen] = useState(false);
@@ -96,6 +98,7 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
           <Link href="/configuracoes" onClick={() => setOpen(false)} className={pathname === "/configuracoes" ? "active" : ""}><Settings2 size={18} strokeWidth={1.8} /><span>Configurações</span></Link>
           <Link href="/conta" onClick={() => setOpen(false)} className={pathname === "/conta" ? "active" : ""}><UserRound size={18} strokeWidth={1.8} /><span>Conta e equipe</span></Link>
           {canAdminister ? <Link href="/admin" onClick={() => setOpen(false)} className={pathname === "/admin" ? "active" : ""}><ShieldCheck size={18} strokeWidth={1.8} /><span>Administração</span></Link> : null}
+          {platformAdmin ? <Link href="/admin-kronos" onClick={() => setOpen(false)} className={pathname === "/admin-kronos" ? "active" : ""}><Crown size={18} strokeWidth={1.8} /><span>Central Kronos</span></Link> : null}
           <Link href="/ajuda" onClick={() => setOpen(false)} className={pathname === "/ajuda" ? "active" : ""}><CircleHelp size={18} strokeWidth={1.8} /><span>Ajuda e FAQ</span></Link>
         </nav>
         <div className="sidebar__insight">
