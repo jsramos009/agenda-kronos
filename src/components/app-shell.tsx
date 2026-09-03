@@ -25,6 +25,7 @@ import {
   Tags,
   UserCog,
   Plus,
+  ReceiptText,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -39,6 +40,7 @@ const navigation = [
   { href: "/atendimentos", label: "Atendimentos", icon: SquareKanban },
   { href: "/clientes", label: "Clientes", icon: ContactRound },
   { href: "/servicos", label: "Serviços", icon: Tags },
+  { href: "/pagamentos", label: "Pagamentos", icon: ReceiptText },
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/conhecimento", label: "Conhecimento", icon: BookOpen },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },

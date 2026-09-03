@@ -1,5 +1,5 @@
 begin;
-select plan(20);
+select plan(26);
 
 select has_table('public', 'organizations', 'organizations exists');
 select has_table('public', 'organization_members', 'organization_members exists');
@@ -10,6 +10,21 @@ select has_table('public', 'workflow_stages', 'workflow_stages exists');
 select has_table('public', 'work_items', 'work_items exists');
 select has_table('public', 'audit_events', 'audit_events exists');
 select has_table('public', 'organization_invitations', 'organization invitations exists');
+select has_table('public', 'payment_provider_connections', 'payment provider connections exists');
+select has_table('public', 'payment_provider_credentials', 'encrypted payment credentials exist');
+select has_table('public', 'customer_payment_provider_links', 'provider customer links exist');
+select has_table('public', 'payment_charges', 'payment charges exist');
+select has_table('public', 'payment_webhook_events', 'payment webhook event inbox exists');
+
+select ok(
+  not exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name in ('payment_provider_credentials', 'payment_webhook_events')
+      and grantee in ('anon', 'authenticated')
+  ),
+  'browser roles cannot access credentials or webhook payloads'
+);
 
 select ok(
   (select bool_and(relrowsecurity)

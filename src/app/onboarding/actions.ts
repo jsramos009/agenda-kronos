@@ -120,9 +120,18 @@ export async function completeOnboarding(formData: FormData): Promise<Onboarding
   });
 
   if (error) {
+    console.error("[onboarding.bootstrap_failed]", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    });
     const friendly = error.message.includes("WORKSPACE_LIMIT_REACHED")
       ? "Você já atingiu o limite de duas agendas do plano."
-      : "Não foi possível criar seu espaço agora. Tente novamente.";
+      : error.code === "42501"
+        ? "Sua sessão não tem permissão para criar este espaço. Entre novamente e repita a ativação."
+        : error.code === "22023"
+          ? "Uma configuração do espaço ficou inválida. Volte uma etapa, revise os campos e tente novamente."
+          : `Não foi possível criar seu espaço agora. Código de diagnóstico: ${error.code || "ONB-001"}.`;
     return { ok: false, message: friendly };
   }
 
