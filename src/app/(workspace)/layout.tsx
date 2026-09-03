@@ -8,7 +8,10 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   const workspace = await getCurrentWorkspace();
   if (!workspace) redirect("/onboarding");
   if (!workspace.demo && workspace.subscriptionStatus !== "active") redirect("/assinatura");
-  const [workspaces, platformAdmin] = await Promise.all([getAvailableWorkspaces(), getPlatformAdmin()]);
+  const [workspaces, platformAdmin] = await Promise.all([
+    getAvailableWorkspaces(),
+    workspace.demo ? Promise.resolve(null) : getPlatformAdmin(),
+  ]);
 
   return (
     <NicheProvider

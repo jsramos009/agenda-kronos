@@ -33,13 +33,13 @@ export function daysBetween(startKey: string, endKey: string) {
 }
 
 export function weekDayLabels(weekStart: string) {
-  const weekdays = ["SEG", "TER", "QUA", "QUI", "SEX"];
+  const weekdays = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
   return weekdays.map((weekday, index) => `${weekday} ${shiftDateKey(weekStart, index).slice(8, 10)}`);
 }
 
 export function weekRangeLabel(weekStart: string) {
   const start = dateFromKey(weekStart);
-  const end = dateFromKey(shiftDateKey(weekStart, 4));
+  const end = dateFromKey(shiftDateKey(weekStart, 6));
   const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" });
   const year = end.getUTCFullYear();
   if (start.getUTCMonth() === end.getUTCMonth()) {

@@ -85,11 +85,13 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
     customerId: z.string().uuid(),
     serviceId: z.string().uuid(),
     startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
+    reminderMinutes: z.coerce.number().int().min(0).max(10_080),
     notes: z.string().trim().max(1000).optional(),
   }).safeParse({
     customerId: formData.get("customerId"),
     serviceId: formData.get("serviceId"),
     startsAt: formData.get("startsAt"),
+    reminderMinutes: formData.get("reminderMinutes") || 0,
     notes: formData.get("notes") || undefined,
   });
   if (!parsed.success) return { status: "error", message: "Selecione cliente, serviço e horário válidos." };
@@ -100,11 +102,12 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
     const { workspace, supabase } = await tenantContext();
     const { data: claimData } = await supabase.auth.getClaims();
     const userId = claimData?.claims?.sub;
-    const [{ data: member }, { data: stage }] = await Promise.all([
+    const [{ data: member }, { data: stage }, { data: customer }] = await Promise.all([
       supabase.from("organization_members").select("id").eq("organization_id", workspace.organizationId).eq("user_id", userId ?? "").maybeSingle(),
       supabase.from("workflow_stages").select("id").eq("organization_id", workspace.organizationId).order("position").limit(1).maybeSingle(),
+      supabase.from("customers").select("email, phone").eq("organization_id", workspace.organizationId).eq("id", parsed.data.customerId).maybeSingle(),
     ]);
-    const { error } = await supabase.rpc("create_appointment_with_work_item", {
+    const { data: appointmentId, error } = await supabase.rpc("create_appointment_with_work_item", {
       target_organization_id: workspace.organizationId,
       target_customer_id: parsed.data.customerId,
       target_service_id: parsed.data.serviceId,
@@ -118,11 +121,25 @@ export async function createAppointment(_: ActionState, formData: FormData): Pro
       if (error.code === "23P01") throw new Error("Esse profissional já possui um atendimento no horário escolhido.");
       throw new Error(error.message);
     }
+    const recipient = customer?.email || customer?.phone;
+    const scheduledFor = new Date(startsAt.getTime() - parsed.data.reminderMinutes * 60_000);
+    let reminderMessage = "";
+    if (appointmentId && recipient && parsed.data.reminderMinutes > 0 && scheduledFor > new Date()) {
+      const { error: reminderError } = await supabase.from("notification_jobs").insert({
+        organization_id: workspace.organizationId,
+        appointment_id: appointmentId,
+        channel: customer?.email ? "email" : "whatsapp",
+        template_key: "appointment_reminder",
+        recipient,
+        scheduled_for: scheduledFor.toISOString(),
+      });
+      if (reminderError) reminderMessage = " O evento foi salvo, mas o lembrete não pôde ser programado.";
+    }
     revalidatePath("/agenda");
     revalidatePath("/atendimentos");
     revalidatePath("/dashboard");
     revalidatePath("/relatorios");
-    return { status: "success", message: "Agendamento criado sem conflito." };
+    return { status: "success", message: `Agendamento criado sem conflito.${reminderMessage}` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Falha ao criar agendamento." };
   }
@@ -137,6 +154,10 @@ export async function rescheduleAppointment(appointmentId: string, startsAt: str
 
   try {
     const { workspace, supabase } = await tenantContext();
+    const [{ data: previousAppointment }, { data: pendingReminders }] = await Promise.all([
+      supabase.from("appointments").select("starts_at").eq("id", parsed.data.appointmentId).eq("organization_id", workspace.organizationId).maybeSingle(),
+      supabase.from("notification_jobs").select("id, scheduled_for").eq("appointment_id", parsed.data.appointmentId).eq("organization_id", workspace.organizationId).eq("status", "pending"),
+    ]);
     const { error } = await supabase.rpc("reschedule_appointment", {
       target_organization_id: workspace.organizationId,
       target_appointment_id: parsed.data.appointmentId,
@@ -144,6 +165,14 @@ export async function rescheduleAppointment(appointmentId: string, startsAt: str
     });
     if (error?.code === "23P01") return { status: "error", message: "Esse horário já está ocupado." };
     if (error) throw error;
+    if (previousAppointment?.starts_at && pendingReminders?.length) {
+      const previousStart = new Date(previousAppointment.starts_at).getTime();
+      const nextStart = parsed.data.startsAt.getTime();
+      await Promise.all(pendingReminders.map((reminder) => {
+        const offset = previousStart - new Date(reminder.scheduled_for).getTime();
+        return supabase.from("notification_jobs").update({ scheduled_for: new Date(nextStart - offset).toISOString() }).eq("id", reminder.id).eq("organization_id", workspace.organizationId);
+      }));
+    }
     revalidatePath("/agenda");
     revalidatePath("/dashboard");
     revalidatePath("/relatorios");
@@ -241,6 +270,7 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
     agendaEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     bookingNotice: z.coerce.number().int().min(0).max(10080),
     cancellationNotice: z.coerce.number().int().min(0).max(43200),
+    agendaDays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
     selectedServices: z.array(z.string().trim().min(2).max(120)).min(1).max(12),
     workflowNames: z.array(z.string().trim().min(2).max(80)).min(2).max(10),
   }).safeParse({
@@ -255,6 +285,7 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
     agendaEnd: formData.get("agendaEnd"),
     bookingNotice: formData.get("bookingNotice"),
     cancellationNotice: formData.get("cancellationNotice"),
+    agendaDays: parseJsonArray(formData.get("agendaDays")),
     selectedServices: parseJsonArray(formData.get("selectedServices")),
     workflowNames: parseJsonArray(formData.get("workflowNames")),
   });
@@ -271,7 +302,7 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
   try {
     const { workspace, supabase } = await tenantContext();
     const preferences = {
-      agenda: { startsAt: parsed.data.agendaStart, endsAt: parsed.data.agendaEnd },
+      agenda: { startsAt: parsed.data.agendaStart, endsAt: parsed.data.agendaEnd, days: parsed.data.agendaDays },
       notifications: {
         reminder24: formData.get("reminder24") === "true",
         reminder2: formData.get("reminder2") === "true",
@@ -322,10 +353,59 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
     const stageUpdateError = stageResults.find((result) => result.error)?.error;
     if (stageUpdateError) throw stageUpdateError;
 
-    const { error: availabilityError } = await supabase.from("availability_rules").update({ starts_at: parsed.data.agendaStart, ends_at: parsed.data.agendaEnd }).eq("organization_id", workspace.organizationId).eq("active", true);
-    if (availabilityError) throw availabilityError;
+    const { data: availabilityRules, error: availabilityReadError } = await supabase.from("availability_rules").select("id, weekday, member_id, resource_id").eq("organization_id", workspace.organizationId);
+    if (availabilityReadError) throw availabilityReadError;
+    const selectedDays = new Set(parsed.data.agendaDays);
+    const availabilityUpdates = (availabilityRules ?? []).map((rule) => supabase.from("availability_rules").update({ starts_at: parsed.data.agendaStart, ends_at: parsed.data.agendaEnd, active: selectedDays.has(rule.weekday) }).eq("id", rule.id).eq("organization_id", workspace.organizationId));
+    const availabilityUpdateResults = await Promise.all(availabilityUpdates);
+    const availabilityUpdateError = availabilityUpdateResults.find((result) => result.error)?.error;
+    if (availabilityUpdateError) throw availabilityUpdateError;
+    const existingDays = new Set((availabilityRules ?? []).map((rule) => rule.weekday));
+    const missingDays = parsed.data.agendaDays.filter((day) => !existingDays.has(day));
+    if (missingDays.length) {
+      const { data: claims } = await supabase.auth.getClaims();
+      const { data: member, error: memberError } = await supabase.from("organization_members").select("id").eq("organization_id", workspace.organizationId).eq("user_id", claims?.claims?.sub ?? "").eq("active", true).single();
+      if (memberError) throw memberError;
+      const { error: availabilityInsertError } = await supabase.from("availability_rules").insert(missingDays.map((weekday) => ({ organization_id: workspace.organizationId, member_id: member.id, weekday, starts_at: parsed.data.agendaStart, ends_at: parsed.data.agendaEnd, active: true })));
+      if (availabilityInsertError) throw availabilityInsertError;
+    }
     revalidatePath("/", "layout"); return { status: "success", message: "Configurações salvas." };
   } catch { return { status: "error", message: "Não foi possível salvar todas as configurações. Tente novamente." }; }
+}
+
+export async function resizeAppointment(appointmentId: string, durationMinutes: number): Promise<ActionState> {
+  const parsed = z.object({
+    appointmentId: z.string().uuid(),
+    durationMinutes: z.number().int().min(5).max(1440),
+  }).safeParse({ appointmentId, durationMinutes });
+  if (!parsed.success) return { status: "error", message: "Escolha uma duração válida." };
+
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { data: appointment, error: readError } = await supabase
+      .from("appointments")
+      .select("starts_at")
+      .eq("organization_id", workspace.organizationId)
+      .eq("id", parsed.data.appointmentId)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!appointment?.starts_at) return { status: "error", message: "Agendamento não encontrado neste espaço." };
+
+    const endsAt = new Date(new Date(appointment.starts_at).getTime() + parsed.data.durationMinutes * 60_000);
+    const { error } = await supabase
+      .from("appointments")
+      .update({ ends_at: endsAt.toISOString() })
+      .eq("organization_id", workspace.organizationId)
+      .eq("id", parsed.data.appointmentId);
+    if (error?.code === "23P01") return { status: "error", message: "A nova duração invade outro atendimento." };
+    if (error) throw new Error(error.message);
+    revalidatePath("/agenda");
+    revalidatePath("/dashboard");
+    revalidatePath("/relatorios");
+    return { status: "success", message: "Duração do agendamento atualizada." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Falha ao alterar a duração." };
+  }
 }
 
 function durationToMinutes(duration: string) {
@@ -354,4 +434,18 @@ export async function createKnowledgeArticle(_: ActionState, formData: FormData)
   const parsed = z.object({ title: z.string().trim().min(3).max(180), type: z.enum(["process", "manual", "checklist", "faq", "template"]), content: z.string().trim().min(10).max(10_000) }).safeParse({ title: formData.get("title"), type: formData.get("type"), content: formData.get("content") });
   if (!parsed.success) return { status: "error", message: "Informe título, tipo e conteúdo." };
   try { const { workspace, supabase } = await tenantContext(); const { data: claims } = await supabase.auth.getClaims(); const { error } = await supabase.from("knowledge_articles").insert({ organization_id: workspace.organizationId, title: parsed.data.title, type: parsed.data.type, body: { text: parsed.data.content }, status: "draft", created_by: claims?.claims?.sub ?? null }); if (error) throw error; revalidatePath("/conhecimento"); return { status: "success", message: "Artigo criado como rascunho." }; } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao criar artigo." }; }
+}
+
+export async function updateKnowledgeArticle(articleId: string, content: string, published: boolean): Promise<ActionState> {
+  const parsed = z.object({ articleId: z.string().uuid(), content: z.string().trim().min(10).max(10_000), published: z.boolean() }).safeParse({ articleId, content, published });
+  if (!parsed.success) return { status: "error", message: "Revise o conteúdo antes de salvar." };
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { error } = await supabase.from("knowledge_articles").update({ body: { text: parsed.data.content }, status: parsed.data.published ? "published" : "draft" }).eq("id", parsed.data.articleId).eq("organization_id", workspace.organizationId);
+    if (error) throw new Error(error.message);
+    revalidatePath("/conhecimento");
+    return { status: "success", message: parsed.data.published ? "Conteúdo publicado." : "Rascunho salvo." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Falha ao atualizar conteúdo." };
+  }
 }

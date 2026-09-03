@@ -23,12 +23,11 @@ export default async function ConfiguracoesPage() {
       .single(),
     supabase
       .from("availability_rules")
-      .select("starts_at, ends_at")
+      .select("weekday, starts_at, ends_at")
       .eq("organization_id", organizationId)
       .eq("active", true)
       .order("weekday")
-      .limit(1)
-      .maybeSingle(),
+      .limit(7),
     supabase
       .from("services")
       .select("name, active")
@@ -60,10 +59,11 @@ export default async function ConfiguracoesPage() {
     },
     logoUrl,
     agenda: {
-      start: String(availability?.starts_at ?? preferences.agenda?.startsAt ?? "08:00").slice(0, 5),
-      end: String(availability?.ends_at ?? preferences.agenda?.endsAt ?? "18:00").slice(0, 5),
+      start: String(availability?.[0]?.starts_at ?? preferences.agenda?.startsAt ?? "08:00").slice(0, 5),
+      end: String(availability?.[0]?.ends_at ?? preferences.agenda?.endsAt ?? "18:00").slice(0, 5),
       bookingNotice: String(organization?.booking_notice_minutes ?? 60),
       cancellationNotice: String(organization?.cancellation_notice_minutes ?? 240),
+      days: availability?.length ? [...new Set(availability.map((rule) => rule.weekday))] : [1, 2, 3, 4, 5, 6],
     },
     notifications: {
       reminder24: preferences.notifications?.reminder24 ?? true,
