@@ -35,8 +35,8 @@ export default async function PagamentosPage() {
     const [connectionResult, customerResult, appointmentResult, chargeResult] = await Promise.all([
       supabase.from("payment_provider_connections").select("environment, status, account_name, account_document_masked, last_verified_at").eq("organization_id", workspace.organizationId).maybeSingle(),
       supabase.from("customers").select("id, name, email, phone, document").eq("organization_id", workspace.organizationId).eq("active", true).order("name"),
-      supabase.from("appointments").select("id, customer_id, starts_at, services(name)").eq("organization_id", workspace.organizationId).gte("starts_at", new Date().toISOString()).neq("status", "cancelled").order("starts_at").limit(100),
-      supabase.from("payment_charges").select("id, description, amount_cents, due_date, status, invoice_url, bank_slip_url, paid_at, customers(name), appointments(starts_at)").eq("organization_id", workspace.organizationId).order("created_at", { ascending: false }).limit(250),
+      supabase.from("appointments").select("id, customer_id, starts_at, services:services!appointments_service_id_fkey(name)").eq("organization_id", workspace.organizationId).gte("starts_at", new Date().toISOString()).neq("status", "cancelled").order("starts_at").limit(100),
+      supabase.from("payment_charges").select("id, description, amount_cents, due_date, status, invoice_url, bank_slip_url, paid_at, customers:customers!payment_charges_organization_id_customer_id_fkey(name), appointments:appointments!payment_charges_organization_id_appointment_id_fkey(starts_at)").eq("organization_id", workspace.organizationId).order("created_at", { ascending: false }).limit(250),
     ]);
     if (connectionResult.error) throw new Error(connectionResult.error.message);
     if (customerResult.error) throw new Error(customerResult.error.message);
