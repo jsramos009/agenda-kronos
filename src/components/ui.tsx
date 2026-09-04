@@ -2,7 +2,74 @@
 
 import { ArrowUpRight, CalendarPlus, Clock3, Plus } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from "react";
+
+function classes(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  loading?: boolean;
+  active?: boolean;
+};
+
+export function Button({ variant = "primary", loading = false, active, className, children, disabled, ...props }: ButtonProps) {
+  return (
+    <button
+      className={classes("button", `button--${variant}`, active && "is-active", className)}
+      aria-busy={loading || undefined}
+      aria-pressed={active === undefined ? undefined : active}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading ? <span className="button__progress" aria-hidden="true" /> : null}
+      {children}
+    </button>
+  );
+}
+
+type FieldProps = HTMLAttributes<HTMLLabelElement> & {
+  label: ReactNode;
+  help?: ReactNode;
+  error?: ReactNode;
+  children: ReactNode;
+};
+
+export function Field({ label, help, error, className, children, ...props }: FieldProps) {
+  const hintId = useId();
+  const descriptionId = help || error ? hintId : undefined;
+  const controlElement = isValidElement(children)
+    ? children as ReactElement<{ "aria-describedby"?: string; "aria-invalid"?: boolean | "grammar" | "spelling" }>
+    : null;
+  const describedBy = [controlElement?.props["aria-describedby"], descriptionId].filter(Boolean).join(" ") || undefined;
+  const invalid = error ? true : controlElement?.props["aria-invalid"];
+  const control = controlElement ? cloneElement(controlElement, { "aria-describedby": describedBy, "aria-invalid": invalid }) : children;
+  return (
+    <label className={classes("field", Boolean(error) && "field--error", className)} {...props}>
+      <span>{label}</span>
+      {control}
+      {error ? <small id={hintId} className="field__error">{error}</small> : help ? <small id={hintId} className="field__help">{help}</small> : null}
+    </label>
+  );
+}
+
+export function Surface({ variant = "base", className, ...props }: HTMLAttributes<HTMLDivElement> & { variant?: "base" | "subtle" | "overlay" }) {
+  return <div className={classes("surface", `surface--${variant}`, className)} {...props} />;
+}
+
+export function Overlay({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={classes("ui-overlay", className)} {...props} />;
+}
+
+export function Badge({ count, children, className, ...props }: HTMLAttributes<HTMLSpanElement> & { count?: number; children?: ReactNode }) {
+  if (typeof count === "number" && count <= 0) return null;
+  return <span className={classes("badge", className)} {...props}>{typeof count === "number" ? (count > 99 ? "99+" : count) : children}</span>;
+}
+
+export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={classes("skeleton", className)} aria-hidden="true" {...props} />;
+}
 
 export function PageHeader({ eyebrow, title, description, action = "Novo agendamento", actionHref }: { eyebrow: string; title: string; description: string; action?: string | null; actionHref?: string }) {
   return (
@@ -50,13 +117,30 @@ export function SectionHeading({ title, link, href }: { title: string; link?: st
   );
 }
 
-export function EmptyState({ title, text, action }: { title: string; text: string; action: string }) {
+type EmptyStateProps = { title: string; text: string } & (
+  | { action?: never; actionHref?: never; onAction?: never }
+  | { action: string; actionHref: string; onAction?: never }
+  | { action: string; actionHref?: never; onAction: () => void }
+);
+
+export function EmptyState(props: EmptyStateProps) {
+  const { title, text } = props;
   return (
     <div className="empty-state">
       <span><Plus size={22} /></span>
       <h3>{title}</h3>
       <p>{text}</p>
-      <button className="button button--secondary">{action}</button>
+      {"actionHref" in props && props.actionHref ? <Link className="button button--secondary" href={props.actionHref}>{props.action}</Link> : null}
+      {"onAction" in props && props.onAction ? <Button variant="secondary" onClick={props.onAction}>{props.action}</Button> : null}
+    </div>
+  );
+}
+
+export function InlineError({ title = "Não foi possível carregar", text, retry }: { title?: string; text: string; retry?: () => void }) {
+  return (
+    <div className="inline-error" role="alert">
+      <div><strong>{title}</strong><span>{text}</span></div>
+      {retry ? <Button variant="secondary" onClick={retry}>Tentar novamente</Button> : null}
     </div>
   );
 }
