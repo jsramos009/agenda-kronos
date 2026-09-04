@@ -1,5 +1,5 @@
 begin;
-select plan(34);
+select plan(44);
 
 select has_table('public', 'organizations', 'organizations exists');
 select has_table('public', 'organization_members', 'organization_members exists');
@@ -17,6 +17,59 @@ select has_table('public', 'payment_charges', 'payment charges exist');
 select has_table('public', 'payment_webhook_events', 'payment webhook event inbox exists');
 select has_column('public', 'recommendations', 'read_at', 'recommendations persist their read state');
 select has_index('public', 'recommendations', 'recommendations_unread_created_idx', 'unread recommendations have a tenant-aware index');
+select has_table('public', 'in_app_notifications', 'in-app notifications exist separately from external jobs');
+select has_column('public', 'in_app_notifications', 'read_at', 'in-app notification read state is persistent');
+select has_column('public', 'in_app_notifications', 'event_key', 'notifications have a stable operation dedupe key');
+select has_index('public', 'in_app_notifications', 'in_app_notifications_user_unread_idx', 'unread notifications have a recipient index');
+select ok(
+  (select relrowsecurity from pg_class where oid = 'public.in_app_notifications'::regclass),
+  'in-app notifications have RLS enabled'
+);
+select is(
+  (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'in_app_notifications'),
+  2,
+  'notifications expose only recipient select and update policies'
+);
+select ok(
+  has_table_privilege('authenticated', 'public.in_app_notifications', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.in_app_notifications', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.in_app_notifications', 'DELETE'),
+  'browser roles can read notifications but cannot create or delete them'
+);
+select ok(
+  exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+      and p.proname = 'notify_appointment_members'
+      and p.prosecdef
+      and p.proconfig @> array['search_path=""']
+  )
+  and not has_function_privilege('authenticated', 'private.notify_appointment_members()', 'EXECUTE'),
+  'appointment notification trigger is hardened and not browser-callable'
+);
+select ok(
+  exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.appointments'::regclass
+      and tgname = 'appointments_notify_members'
+      and not tgisinternal
+  ),
+  'appointments emit in-app notifications through a database trigger'
+);
+select is(
+  (
+    select count(*)::integer
+    from unnest(array['appointments', 'customers', 'in_app_notifications', 'recommendations']) required(tablename)
+    where not exists (
+      select 1 from pg_publication_tables published
+      where published.pubname = 'supabase_realtime'
+        and published.schemaname = 'public'
+        and published.tablename = required.tablename
+    )
+  ),
+  0,
+  'realtime publication includes the four required tenant tables without replacing existing entries'
+);
 select ok(
   exists (
     select 1 from pg_proc p

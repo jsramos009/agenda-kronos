@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, PointerEvent as ReactPointerEvent, useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import { FormEvent, PointerEvent as ReactPointerEvent, useActionState, useEffect, useMemo, useState, useTransition, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CalendarDays, ChevronLeft, ChevronRight, Filter, GripVertical, LayoutGrid, List, MessageCircle, Rows3, Search, X } from "lucide-react";
 import { createAppointment, rescheduleAppointment, resizeAppointment, updateAppointmentNotes, type ActionState } from "@/app/(workspace)/actions";
@@ -17,7 +17,13 @@ const initialActionState: ActionState = { status: "idle", message: "" };
 export function AppointmentManager({ events, customers, services, demo, weekStart, anchorDate, today, initialView, allowedWeekdays }: { events: CalendarEvent[]; customers: AppointmentOption[]; services: AppointmentOption[]; demo: boolean; weekStart: string; anchorDate: string; today: string; initialView: "day" | "week" | "month"; allowedWeekdays: number[] }) {
   const router = useRouter();
   const { niche } = useNiche();
-  const [rows, setRows] = useState(events);
+  const incomingEventsSignature = events.map((event) => `${event.id}:${event.startsAt}:${event.endTime}:${event.notes ?? ""}`).join("|");
+  const [calendarModel, setCalendarModel] = useState(() => ({ signature: incomingEventsSignature, rows: events }));
+  const rows = calendarModel.rows;
+  const setRows = (next: SetStateAction<CalendarEvent[]>) => setCalendarModel((current) => ({
+    ...current,
+    rows: typeof next === "function" ? next(current.rows) : next,
+  }));
   const [view, setView] = useState<CalendarView>(initialView);
   const [query, setQuery] = useState("");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -34,6 +40,10 @@ export function AppointmentManager({ events, customers, services, demo, weekStar
   const filtered = useMemo(() => rows.filter((event) => `${event.client} ${event.service} ${event.notes ?? ""}`.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR")) && (serviceFilter === "all" || event.service === serviceFilter)), [query, rows, serviceFilter]);
   const visible = filtered.filter((event) => isVisibleInView(event.dateKey, view, anchorDate, weekStart));
   const serviceNames = [...new Set(rows.map((event) => event.service))];
+
+  if (!pending && !isUpdating && calendarModel.signature !== incomingEventsSignature) {
+    setCalendarModel({ signature: incomingEventsSignature, rows: events });
+  }
 
   useEffect(() => {
     const normalizedView = view === "list" ? "week" : view;

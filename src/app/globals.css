@@ -1000,3 +1000,95 @@ body { font-size: 16px; line-height: 1.55; }
 .topbar__data-status { color: var(--warning); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 @media (max-width: 760px) { .insight-details { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .insight-details-toggle svg { transition: none; } }
+
+/* Realtime notifications — glass is limited to these floating layers. */
+.notification-control { flex: 0 0 auto; position: relative; }
+.topbar .global-search { min-width: 0; }
+.notification-bell { min-width: 44px; min-height: 44px; position: relative; }
+.notification-bell > span {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid var(--surface-overlay);
+  border-radius: var(--radius-pill);
+  color: var(--text-on-accent);
+  background: var(--color-action);
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 800;
+  position: absolute;
+  right: -5px;
+  top: -5px;
+}
+.notification-dismiss { position: fixed; inset: 0; z-index: calc(var(--z-popover) - 1); border: 0; background: transparent; cursor: default; }
+.notification-center {
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(680px, calc(100dvh - 96px));
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: var(--z-popover);
+  right: clamp(18px, 2.6vw, 52px);
+  top: 64px;
+  animation: notification-enter var(--motion-normal) var(--ease-standard);
+  background: rgba(255, 254, 250, .97);
+}
+.notification-center > header { min-height: 78px; padding: 18px 18px 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.notification-center > header,
+.notification-center__read-all,
+.notification-center__error { flex-shrink: 0; }
+.notification-center > header small { color: var(--text-secondary); font-size: 11px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.notification-center > header h2 { margin: 3px 0 0; color: var(--brand-umber); font-family: var(--font-display); font-size: 23px; letter-spacing: -.025em; }
+.notification-center__close { width: 44px; height: 44px; border-color: transparent; background: transparent; }
+.notification-center__read-all { min-height: 44px; margin: 0 18px 8px auto; padding: 0 4px; border: 0; color: var(--color-action); background: transparent; display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 750; cursor: pointer; }
+.notification-center__list { min-height: 0; max-height: none; padding: 0 10px 12px; overflow-y: auto; overscroll-behavior: contain; flex: 1; }
+.notification-center__list article { min-height: 104px; padding: 14px 8px; border-top: 1px solid color-mix(in srgb, var(--brand-copper) 20%, var(--color-border)); display: grid; grid-template-columns: 36px 1fr 44px; align-items: start; gap: 9px; }
+.notification-center__list article > svg:first-child { width: 32px; height: 32px; padding: 7px; border-radius: 9px; color: var(--color-action); background: color-mix(in srgb, var(--color-action) 8%, var(--surface-base)); }
+.notification-center__list article > a { min-width: 0; }
+.notification-center__list article strong { display: block; font-size: 14px; }
+.notification-center__list article p { margin: 5px 0 7px; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.notification-center__list article time { color: var(--text-secondary); font-family: var(--font-data); font-size: 11px; }
+.notification-center__list article > button { width: 44px; height: 44px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; }
+.notification-center__list article > button span { width: 9px; height: 9px; border-radius: 50%; background: var(--color-action); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-action) 10%, transparent); }
+.notification-center__list article > svg:last-child { margin: 12px; color: var(--text-secondary); }
+.notification-center__list article.is-read { opacity: .82; }
+.notification-center__empty { min-height: 220px; padding: 36px 24px; color: var(--text-tertiary); display: grid; place-items: center; align-content: center; text-align: center; }
+.notification-center__empty strong { margin-top: 10px; color: var(--text-primary); font-size: 14px; }
+.notification-center__empty p { max-width: 28ch; margin: 5px 0 0; font-size: 13px; line-height: 1.5; }
+.notification-center__error { margin: 0 14px 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--color-border)); border-radius: var(--radius-control); color: var(--danger); background: color-mix(in srgb, var(--danger) 6%, var(--surface-base)); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.notification-center__error p { margin: 0; font-size: 13px; line-height: 1.4; }
+.notification-center__error button,
+.notification-center__error-state button { min-height: 44px; padding: 0 12px; border: 1px solid currentColor; border-radius: var(--radius-control); color: var(--danger); background: var(--surface-base); font-size: 12px; font-weight: 750; cursor: pointer; }
+.notification-center__error-state { min-height: 230px; padding: 32px 24px; color: var(--danger); display: grid; place-items: center; align-content: center; text-align: center; }
+.notification-center__error-state strong { margin-top: 10px; color: var(--text-primary); font-size: 16px; }
+.notification-center__error-state p { margin: 6px 0 14px; color: var(--text-secondary); font-size: 13px; }
+.notification-toasts { width: min(360px, calc(100vw - 32px)); display: grid; gap: 10px; position: fixed; z-index: var(--z-toast); right: clamp(18px, 2.6vw, 52px); top: 88px; pointer-events: none; }
+.notification-toast { min-height: 104px; padding: 15px; display: grid; grid-template-columns: 36px 1fr 44px; align-items: start; gap: 10px; pointer-events: auto; animation: notification-enter var(--motion-normal) var(--ease-standard); background: rgba(255, 254, 250, .97); }
+.notification-toast > svg { width: 34px; height: 34px; padding: 8px; border-radius: 10px; color: var(--color-action); background: color-mix(in srgb, var(--color-action) 9%, var(--surface-base)); }
+.notification-toast small { color: var(--color-action); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.notification-toast strong { margin-top: 3px; display: block; font-size: 14px; }
+.notification-toast p { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.notification-toast > button { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 8px; color: var(--text-secondary); background: transparent; display: grid; place-items: center; cursor: pointer; }
+.realtime-status { padding: 7px 11px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); color: var(--text-secondary); background: var(--surface-base); box-shadow: var(--shadow-rest); position: fixed; z-index: var(--z-toast); right: 20px; bottom: 20px; font-size: 10px; font-weight: 700; }
+@keyframes notification-enter { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (max-width: 620px) {
+  .notification-center { width: 100%; max-height: min(78dvh, 680px); border-radius: var(--radius-overlay) var(--radius-overlay) 0 0; inset: auto 0 0; animation-name: notification-drawer-enter; }
+  .notification-dismiss { background: rgba(32, 26, 23, .46); }
+  .notification-toasts { width: calc(100vw - 24px); right: 12px; top: 70px; }
+  .notification-toast { min-height: 88px; }
+}
+@keyframes notification-drawer-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-center,
+  .notification-toast { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .notification-center,
+  .notification-toast { background: var(--surface-base); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

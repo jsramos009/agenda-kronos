@@ -37,6 +37,7 @@ import { useNiche } from "./niche-provider";
 import { switchWorkspace } from "@/app/workspace-actions";
 import type { WorkspaceSummary } from "@/lib/workspace";
 import { applyInsightReadOverride, INSIGHT_READ_STATE_EVENT, reconcileInsightReadOverrides, visibleUnreadInsightIds, type InsightReadStateChange } from "@/lib/insight-badge-events";
+import { NotificationBell } from "./notification-center";
 
 const navigation = [
   { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard },
@@ -244,6 +245,7 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
           <div className="topbar__context"><span>{companyName}</span><strong>{routeContext[currentRoute ?? ""] ?? "Kronos"}</strong></div>
           <form className="global-search" action="/busca" method="get"><Search size={17} /><input name="q" aria-label="Busca global" placeholder="Buscar cliente, serviço ou atendimento…" /></form>
           {insightCountError ? <span className="topbar__data-status" role="status"><AlertCircle size={14} /> Insights indisponíveis</span> : null}
+          <NotificationBell />
           <LiveDate />
         </div>
         <main className="page-content">{children}</main>

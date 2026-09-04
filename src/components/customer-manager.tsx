@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useActionState, useMemo, useState } from "react";
+import { FormEvent, useActionState, useMemo, useState, type SetStateAction } from "react";
 import { Download, Search, SlidersHorizontal, X } from "lucide-react";
 import { createCustomer, type ActionState } from "@/app/(workspace)/actions";
 import { PageHeader } from "@/components/ui";
@@ -9,7 +9,13 @@ export type CustomerRow = { id: string; name: string; phone: string | null; emai
 const initialActionState: ActionState = { status: "idle", message: "" };
 
 export function CustomerManager({ customers, demo }: { customers: CustomerRow[]; demo: boolean }) {
-  const [rows, setRows] = useState(customers);
+  const incomingCustomersSignature = customers.map((customer) => `${customer.id}:${customer.name}:${customer.active}`).join("|");
+  const [customerModel, setCustomerModel] = useState(() => ({ signature: incomingCustomersSignature, rows: customers }));
+  const rows = customerModel.rows;
+  const setRows = (next: SetStateAction<CustomerRow[]>) => setCustomerModel((current) => ({
+    ...current,
+    rows: typeof next === "function" ? next(current.rows) : next,
+  }));
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [selected, setSelected] = useState<CustomerRow | null>(null);
@@ -19,6 +25,10 @@ export function CustomerManager({ customers, demo }: { customers: CustomerRow[];
     const matchesQuery = `${customer.name} ${customer.phone ?? ""} ${customer.email ?? ""}`.toLocaleLowerCase("pt-BR").includes(query.trim().toLocaleLowerCase("pt-BR"));
     return matchesQuery && (filter === "all" || customer.active === (filter === "active"));
   }), [filter, query, rows]);
+
+  if (customerModel.signature !== incomingCustomersSignature) {
+    setCustomerModel({ signature: incomingCustomersSignature, rows: customers });
+  }
 
   const createDemoCustomer = (event: FormEvent<HTMLFormElement>) => {
     if (!demo) return;

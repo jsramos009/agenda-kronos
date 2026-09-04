@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { getPlatformAdmin } from "@/lib/platform-admin";
 import { createClient } from "@/lib/supabase/server";
 import { getVisibleInsightReadState, unreadInsightIds } from "@/lib/queries/insights";
-import { WorkspaceRefreshProvider } from "@/components/workspace-refresh-provider";
+import { WorkspaceRealtimeProvider } from "@/components/workspace-realtime-provider";
+import { mapNotification, type InAppNotificationRow } from "@/lib/notifications";
 
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const workspace = await getCurrentWorkspace();
@@ -19,10 +20,14 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
         return { ids: error ? [] : unreadInsightIds(data ?? []), error: Boolean(error) };
       })()
     : Promise.resolve({ ids: [] as string[], error: false });
-  const [workspaces, platformAdmin, insightSummary] = await Promise.all([
+  const notificationSummaryPromise = !workspace.demo && organizationId
+    ? readNotificationSummary(organizationId)
+    : Promise.resolve({ userId: null, notifications: [], loadError: "" });
+  const [workspaces, platformAdmin, insightSummary, notificationSummary] = await Promise.all([
     getAvailableWorkspaces(),
     workspace.demo ? Promise.resolve(null) : getPlatformAdmin(),
     insightSummaryPromise,
+    notificationSummaryPromise,
   ]);
 
   return (
@@ -31,7 +36,14 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       initialCompanyName={workspace.companyName}
       initialTheme={workspace.theme}
     >
-      <WorkspaceRefreshProvider>
+      <WorkspaceRealtimeProvider
+        key={`${organizationId ?? "demo"}:${notificationSummary.userId ?? "guest"}`}
+        organizationId={organizationId}
+        userId={notificationSummary.userId}
+        initialNotifications={notificationSummary.notifications}
+        initialLoadError={notificationSummary.loadError}
+        enabled={!workspace.demo}
+      >
         <AppShell
           fullName={workspace.fullName}
           role={workspace.role}
@@ -43,7 +55,27 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
           unreadInsightIds={insightSummary.ids}
           insightCountError={insightSummary.error}
         >{children}</AppShell>
-      </WorkspaceRefreshProvider>
+      </WorkspaceRealtimeProvider>
     </NicheProvider>
   );
+}
+
+async function readNotificationSummary(organizationId: string) {
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = typeof claims?.claims?.sub === "string" ? claims.claims.sub : null;
+  if (!userId) return { userId: null, notifications: [], loadError: "Sua sessão expirou. Entre novamente." };
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data, error } = await supabase
+      .from("in_app_notifications")
+      .select("id, organization_id, user_id, actor_id, type, title, message, entity_type, entity_id, metadata, read_at, created_at")
+      .eq("organization_id", organizationId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (!error) return { userId, notifications: ((data ?? []) as InAppNotificationRow[]).map(mapNotification), loadError: "" };
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 120 * (attempt + 1)));
+  }
+  return { userId, notifications: [], loadError: "Não foi possível carregar as notificações." };
 }
