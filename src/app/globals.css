@@ -974,3 +974,29 @@ body { font-size: 16px; line-height: 1.55; }
   .surface--overlay,
   .sidebar.sidebar--open { background: var(--surface-base); }
 }
+
+.insight-details-toggle { width: fit-content; margin-top: 12px; padding: 0; border: 0; color: var(--tenant-primary); background: transparent; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 750; cursor: pointer; }
+.insight-details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.insight-details { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.insights-list > article.is-read { border-left-color: var(--neutral-300); }
+.insights-list > article[aria-busy="true"] { opacity: .68; }
+.sr-only { width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; position: absolute; }
+.insights-loading { padding-top: 28px; display: grid; gap: 26px; }
+.insights-loading__header { display: grid; gap: 10px; }
+.insights-loading__header .skeleton:nth-child(1) { width: 150px; height: 12px; }
+.insights-loading__header .skeleton:nth-child(2) { width: min(330px, 70%); height: 52px; }
+.insights-loading__header .skeleton:nth-child(3) { width: min(620px, 90%); height: 22px; }
+.insights-loading__tabs { display: flex; gap: 8px; }
+.insights-loading__tabs .skeleton { width: 104px; height: 42px; }
+.insights-loading__card { min-height: 190px; }
+.insights-loading__index { width: 48px; height: 48px; }
+.insights-loading__copy { display: grid; align-content: start; gap: 12px; }
+.insights-loading__copy .skeleton:nth-child(1) { width: 112px; height: 12px; }
+.insights-loading__copy .skeleton:nth-child(2) { width: min(460px, 82%); height: 30px; }
+.insights-loading__copy .skeleton:nth-child(3) { width: min(620px, 96%); height: 42px; }
+.insights-loading__actions { display: grid; align-content: start; gap: 10px; }
+.insights-loading__actions .skeleton { width: 100%; height: 44px; }
+.insight-readonly { color: var(--text-tertiary); display: flex; align-items: center; justify-content: flex-end; gap: 7px; font-size: 12px; }
+.topbar__data-status { color: var(--warning); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+@media (max-width: 760px) { .insight-details { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .insight-details-toggle svg { transition: none; } }

@@ -420,14 +420,34 @@ function priceToCents(price: string) {
   return Math.round(Number(match[1].replace(/\./g, "").replace(",", ".")) * 100);
 }
 
-export async function updateRecommendation(recommendationId: string, status: "applied" | "dismissed" | "snoozed"): Promise<ActionState> {
+export async function updateRecommendation(recommendationId: string, status: "new" | "applied" | "dismissed" | "snoozed"): Promise<ActionState> {
   if (!z.string().uuid().safeParse(recommendationId).success) return { status: "error", message: "Recomendação inválida." };
   try {
     const { workspace, supabase } = await tenantContext();
     const values = status === "applied" ? { status, applied_at: new Date().toISOString(), snoozed_until: null } : status === "snoozed" ? { status, snoozed_until: new Date(Date.now() + 86_400_000).toISOString(), applied_at: null } : { status, snoozed_until: null, applied_at: null };
-    const { error } = await supabase.from("recommendations").update(values).eq("id", recommendationId).eq("organization_id", workspace.organizationId);
-    if (error) throw error; revalidatePath("/insights"); return { status: "success", message: status === "applied" ? "Insight aplicado." : status === "snoozed" ? "Lembrete agendado para amanhã." : "Insight dispensado." };
+    const { data, error } = await supabase.from("recommendations").update(values).eq("id", recommendationId).eq("organization_id", workspace.organizationId).select("id").maybeSingle();
+    if (error) throw error;
+    if (!data) return { status: "error", message: "Insight não encontrado ou sem permissão para alteração." };
+    revalidatePath("/insights"); revalidatePath("/", "layout"); return { status: "success", message: status === "new" ? "Insight reaberto." : status === "applied" ? "Insight aplicado." : status === "snoozed" ? "Lembrete agendado para amanhã." : "Insight dispensado." };
   } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao atualizar insight." }; }
+}
+
+export async function markRecommendationRead(recommendationId: string): Promise<ActionState> {
+  if (!z.string().uuid().safeParse(recommendationId).success) return { status: "error", message: "Recomendação inválida." };
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { data, error } = await supabase.rpc("mark_recommendation_read", {
+      target_organization_id: workspace.organizationId,
+      target_recommendation_id: recommendationId,
+    });
+    if (error) throw error;
+    if (!data) return { status: "error", message: "Insight não encontrado ou sem permissão para leitura." };
+    revalidatePath("/insights");
+    revalidatePath("/", "layout");
+    return { status: "success", message: "Insight marcado como lido." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Falha ao marcar insight como lido." };
+  }
 }
 
 export async function createKnowledgeArticle(_: ActionState, formData: FormData): Promise<ActionState> {

@@ -1,5 +1,5 @@
 begin;
-select plan(31);
+select plan(34);
 
 select has_table('public', 'organizations', 'organizations exists');
 select has_table('public', 'organization_members', 'organization_members exists');
@@ -15,6 +15,21 @@ select has_table('public', 'payment_provider_credentials', 'encrypted payment cr
 select has_table('public', 'customer_payment_provider_links', 'provider customer links exist');
 select has_table('public', 'payment_charges', 'payment charges exist');
 select has_table('public', 'payment_webhook_events', 'payment webhook event inbox exists');
+select has_column('public', 'recommendations', 'read_at', 'recommendations persist their read state');
+select has_index('public', 'recommendations', 'recommendations_unread_created_idx', 'unread recommendations have a tenant-aware index');
+select ok(
+  exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'mark_recommendation_read'
+      and p.prosecdef
+      and p.proconfig @> array['search_path=""']
+  )
+  and has_function_privilege('authenticated', 'public.mark_recommendation_read(uuid, uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.mark_recommendation_read(uuid, uuid)', 'EXECUTE'),
+  'recommendation read RPC is hardened and restricted to authenticated users'
+);
 
 select ok(
   not exists (
@@ -35,7 +50,8 @@ select ok(
      'public.customers'::regclass,
      'public.appointments'::regclass,
      'public.work_items'::regclass,
-     'public.organization_invitations'::regclass
+     'public.organization_invitations'::regclass,
+     'public.recommendations'::regclass
    )),
   'tenant tables have RLS enabled'
 );

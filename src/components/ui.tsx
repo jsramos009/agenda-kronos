@@ -136,11 +136,11 @@ export function EmptyState(props: EmptyStateProps) {
   );
 }
 
-export function InlineError({ title = "Não foi possível carregar", text, retry }: { title?: string; text: string; retry?: () => void }) {
+export function InlineError({ title = "Não foi possível carregar", text, retry, retryPending = false }: { title?: string; text: string; retry?: () => void; retryPending?: boolean }) {
   return (
     <div className="inline-error" role="alert">
       <div><strong>{title}</strong><span>{text}</span></div>
-      {retry ? <Button variant="secondary" onClick={retry}>Tentar novamente</Button> : null}
+      {retry ? <Button variant="secondary" loading={retryPending} disabled={retryPending} onClick={retry}>Tentar novamente</Button> : null}
     </div>
   );
 }

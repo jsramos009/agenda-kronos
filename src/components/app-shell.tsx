@@ -10,6 +10,7 @@ import {
   Check,
   ChevronDown,
   ArrowRight,
+  AlertCircle,
   ContactRound,
   LayoutDashboard,
   Lightbulb,
@@ -35,6 +36,7 @@ import { KronosMark } from "./kronos-mark";
 import { useNiche } from "./niche-provider";
 import { switchWorkspace } from "@/app/workspace-actions";
 import type { WorkspaceSummary } from "@/lib/workspace";
+import { applyInsightReadOverride, INSIGHT_READ_STATE_EVENT, reconcileInsightReadOverrides, visibleUnreadInsightIds, type InsightReadStateChange } from "@/lib/insight-badge-events";
 
 const navigation = [
   { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard },
@@ -58,7 +60,8 @@ type AppShellProps = {
   workspaces?: WorkspaceSummary[];
   platformAdmin?: boolean;
   /** Fase 1: será preenchido pela mesma query real usada na lista de Insights. */
-  insightCount?: number;
+  unreadInsightIds?: string[];
+  insightCountError?: boolean;
 };
 
 const routeContext: Record<string, string> = {
@@ -87,12 +90,14 @@ const subscribeToMobileShell = (notify: () => void) => {
 const getMobileShellSnapshot = () => window.matchMedia(mobileShellQuery).matches;
 const getServerMobileShellSnapshot = () => false;
 
-export function AppShell({ children, fullName = "Ana Martins", role = "Administradora", roleKey = "admin", demo = false, activeWorkspaceId = null, workspaces = [], platformAdmin = false, insightCount = 0 }: AppShellProps) {
+export function AppShell({ children, fullName = "Ana Martins", role = "Administradora", roleKey = "admin", demo = false, activeWorkspaceId = null, workspaces = [], platformAdmin = false, unreadInsightIds = [], insightCountError = false }: AppShellProps) {
   const pathname = usePathname();
   const { companyName, niche } = useNiche();
   const [open, setOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const sourceInsightSignature = unreadInsightIds.join("|");
+  const [insightBadge, setInsightBadge] = useState(() => ({ sourceSignature: sourceInsightSignature, sourceIds: new Set(unreadInsightIds), overrides: new Map<string, boolean>() }));
   const isMobileShell = useSyncExternalStore(subscribeToMobileShell, getMobileShellSnapshot, getServerMobileShellSnapshot);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -103,6 +108,20 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
   const accountPanelRef = useRef<HTMLDivElement>(null);
   const canAdminister = roleKey === "owner" || roleKey === "admin" || demo;
   const currentRoute = Object.keys(routeContext).find((route) => pathname === route || pathname.startsWith(`${route}/`));
+  if (insightBadge.sourceSignature !== sourceInsightSignature) {
+    const sourceIds = new Set(unreadInsightIds);
+    setInsightBadge({ sourceSignature: sourceInsightSignature, sourceIds, overrides: reconcileInsightReadOverrides(sourceIds, insightBadge.overrides) });
+  }
+  const visibleInsightCount = visibleUnreadInsightIds(insightBadge.sourceIds, insightBadge.overrides).size;
+
+  useEffect(() => {
+    const updateBadge = (event: Event) => {
+      const change = (event as CustomEvent<InsightReadStateChange>).detail;
+      setInsightBadge((current) => ({ ...current, overrides: reconcileInsightReadOverrides(current.sourceIds, applyInsightReadOverride(current.overrides, change)) }));
+    };
+    window.addEventListener(INSIGHT_READ_STATE_EVENT, updateBadge);
+    return () => window.removeEventListener(INSIGHT_READ_STATE_EVENT, updateBadge);
+  }, []);
 
   useEffect(() => {
     if (!open || !isMobileShell) return;
@@ -189,7 +208,7 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
             <Link key={href} href={href} onClick={() => setOpen(false)} className={pathname === href || pathname.startsWith(`${href}/`) ? "active" : ""}>
               <Icon size={18} strokeWidth={1.8} />
               <span>{label}</span>
-              {label === "Insights" && insightCount > 0 ? <em aria-label={`${insightCount} insights não lidos`}>{insightCount > 99 ? "99+" : insightCount}</em> : null}
+              {label === "Insights" && visibleInsightCount > 0 ? <em aria-label={`${visibleInsightCount} insights não lidos`}>{visibleInsightCount > 99 ? "99+" : visibleInsightCount}</em> : null}
             </Link>
           ))}
           <p className="nav-label nav-label--space">Sistema</p>
@@ -199,9 +218,9 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
           {platformAdmin ? <Link href="/admin-kronos" onClick={() => setOpen(false)} className={pathname.startsWith("/admin-kronos") ? "active" : ""}><Crown size={18} strokeWidth={1.8} /><span>Central Kronos</span></Link> : null}
           <Link href="/ajuda" onClick={() => setOpen(false)} className={pathname.startsWith("/ajuda") ? "active" : ""}><CircleHelp size={18} strokeWidth={1.8} /><span>Ajuda e FAQ</span></Link>
         </nav>
-        {insightCount > 0 ? <div className="sidebar__insight">
+        {visibleInsightCount > 0 ? <div className="sidebar__insight">
           <Sparkles size={17} />
-          <div><strong>{insightCount === 1 ? "Kronos encontrou uma melhoria" : `Kronos encontrou ${insightCount} melhorias`}</strong><small>Baseadas na sua agenda.</small></div>
+          <div><strong>{visibleInsightCount === 1 ? "Kronos encontrou uma melhoria" : `Kronos encontrou ${visibleInsightCount} melhorias`}</strong><small>Baseadas na sua agenda.</small></div>
           <Link href="/insights" aria-label="Ver insights"><ArrowRight size={16} /></Link>
         </div> : null}
         <div className="account-control">
@@ -224,6 +243,7 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
           <button ref={menuButtonRef} className="icon-button menu-button" onClick={() => setOpen(true)} aria-label="Abrir menu" aria-expanded={open} aria-controls="workspace-sidebar"><Menu size={20} /></button>
           <div className="topbar__context"><span>{companyName}</span><strong>{routeContext[currentRoute ?? ""] ?? "Kronos"}</strong></div>
           <form className="global-search" action="/busca" method="get"><Search size={17} /><input name="q" aria-label="Busca global" placeholder="Buscar cliente, serviço ou atendimento…" /></form>
+          {insightCountError ? <span className="topbar__data-status" role="status"><AlertCircle size={14} /> Insights indisponíveis</span> : null}
           <LiveDate />
         </div>
         <main className="page-content">{children}</main>
