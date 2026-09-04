@@ -5,6 +5,7 @@ import { z } from "zod";
 import { niches } from "@/lib/niches";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
+import { localDateTimeToIso } from "@/lib/calendar-grid";
 
 export type ActionState = { status: "idle" | "success" | "error"; message: string };
 
@@ -82,64 +83,61 @@ export async function createService(_: ActionState, formData: FormData): Promise
 
 export async function createAppointment(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = z.object({
-    customerId: z.string().uuid(),
-    serviceId: z.string().uuid(),
+    title: z.string().trim().min(2).max(120).optional().or(z.literal("")),
+    description: z.string().trim().max(1000).optional().or(z.literal("")),
+    location: z.string().trim().max(240).optional().or(z.literal("")),
+    color: z.string().regex(/^#[0-9a-f]{6}$/i),
+    kind: z.enum(["appointment", "custom", "blocked", "internal", "meeting", "other"]),
+    customerId: z.string().uuid().optional().or(z.literal("")),
+    serviceId: z.string().uuid().optional().or(z.literal("")),
     startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
+    endsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
     reminderMinutes: z.coerce.number().int().min(0).max(10_080),
     notes: z.string().trim().max(1000).optional(),
   }).safeParse({
-    customerId: formData.get("customerId"),
-    serviceId: formData.get("serviceId"),
+    title: formData.get("title"), description: formData.get("description"), location: formData.get("location"), color: formData.get("color"), kind: formData.get("kind"),
+    customerId: formData.get("customerId"), serviceId: formData.get("serviceId"),
     startsAt: formData.get("startsAt"),
+    endsAt: formData.get("endsAt"),
     reminderMinutes: formData.get("reminderMinutes") || 0,
     notes: formData.get("notes") || undefined,
   });
-  if (!parsed.success) return { status: "error", message: "Selecione cliente, serviço e horário válidos." };
-  const startsAt = new Date(`${parsed.data.startsAt}:00-03:00`);
-  if (Number.isNaN(startsAt.getTime())) return { status: "error", message: "Escolha uma data e um horário válidos." };
-
+  if (!parsed.success || (!parsed.data.title && !parsed.data.customerId && !parsed.data.serviceId)) return { status: "error", message: "Informe um título, cliente ou serviço e revise os horários." };
   try {
     const { workspace, supabase } = await tenantContext();
     const { data: claimData } = await supabase.auth.getClaims();
     const userId = claimData?.claims?.sub;
-    const [{ data: member }, { data: stage }, { data: customer }] = await Promise.all([
+    const [{ data: member }, { data: stage }, { data: organization }] = await Promise.all([
       supabase.from("organization_members").select("id").eq("organization_id", workspace.organizationId).eq("user_id", userId ?? "").maybeSingle(),
-      supabase.from("workflow_stages").select("id").eq("organization_id", workspace.organizationId).order("position").limit(1).maybeSingle(),
-      supabase.from("customers").select("email, phone").eq("organization_id", workspace.organizationId).eq("id", parsed.data.customerId).maybeSingle(),
+      supabase.from("workflow_stages").select("id").eq("organization_id", workspace.organizationId).eq("active", true).eq("visible", true).order("position").limit(1).maybeSingle(),
+      supabase.from("organizations").select("timezone").eq("id", workspace.organizationId).single(),
     ]);
-    const { data: appointmentId, error } = await supabase.rpc("create_appointment_with_work_item", {
+    const startsAt = new Date(localDateTimeToIso(parsed.data.startsAt, organization?.timezone ?? "America/Sao_Paulo"));
+    const endsAt = new Date(localDateTimeToIso(parsed.data.endsAt, organization?.timezone ?? "America/Sao_Paulo"));
+    if (endsAt <= startsAt) return { status: "error", message: "Escolha início e fim válidos." };
+    const { error } = await supabase.rpc("create_flexible_appointment", {
       target_organization_id: workspace.organizationId,
-      target_customer_id: parsed.data.customerId,
-      target_service_id: parsed.data.serviceId,
+      target_title: parsed.data.title || null, target_description: parsed.data.description || null, target_location: parsed.data.location || null,
+      target_color: parsed.data.color, target_kind: parsed.data.kind,
+      target_customer_id: parsed.data.customerId || null,
+      target_service_id: parsed.data.serviceId || null,
       target_professional_member_id: member?.id ?? null,
       target_stage_id: stage?.id ?? null,
       target_starts_at: startsAt.toISOString(),
+      target_ends_at: endsAt.toISOString(),
       target_notes: parsed.data.notes ?? null,
+      target_reminder_minutes: parsed.data.reminderMinutes,
     });
 
     if (error) {
       if (error.code === "23P01") throw new Error("Esse profissional já possui um atendimento no horário escolhido.");
       throw new Error(error.message);
     }
-    const recipient = customer?.email || customer?.phone;
-    const scheduledFor = new Date(startsAt.getTime() - parsed.data.reminderMinutes * 60_000);
-    let reminderMessage = "";
-    if (appointmentId && recipient && parsed.data.reminderMinutes > 0 && scheduledFor > new Date()) {
-      const { error: reminderError } = await supabase.from("notification_jobs").insert({
-        organization_id: workspace.organizationId,
-        appointment_id: appointmentId,
-        channel: customer?.email ? "email" : "whatsapp",
-        template_key: "appointment_reminder",
-        recipient,
-        scheduled_for: scheduledFor.toISOString(),
-      });
-      if (reminderError) reminderMessage = " O evento foi salvo, mas o lembrete não pôde ser programado.";
-    }
     revalidatePath("/agenda");
     revalidatePath("/atendimentos");
     revalidatePath("/dashboard");
     revalidatePath("/relatorios");
-    return { status: "success", message: `Agendamento criado sem conflito.${reminderMessage}` };
+    return { status: "success", message: "Agendamento criado sem conflito." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Falha ao criar agendamento." };
   }
@@ -154,25 +152,18 @@ export async function rescheduleAppointment(appointmentId: string, startsAt: str
 
   try {
     const { workspace, supabase } = await tenantContext();
-    const [{ data: previousAppointment }, { data: pendingReminders }] = await Promise.all([
-      supabase.from("appointments").select("starts_at").eq("id", parsed.data.appointmentId).eq("organization_id", workspace.organizationId).maybeSingle(),
-      supabase.from("notification_jobs").select("id, scheduled_for").eq("appointment_id", parsed.data.appointmentId).eq("organization_id", workspace.organizationId).eq("status", "pending"),
-    ]);
-    const { error } = await supabase.rpc("reschedule_appointment", {
+    const { data: previousAppointment } = await supabase.from("appointments").select("starts_at, ends_at").eq("id", parsed.data.appointmentId).eq("organization_id", workspace.organizationId).maybeSingle();
+    if (!previousAppointment?.starts_at || !previousAppointment.ends_at) return { status: "error", message: "Agendamento não encontrado." };
+    const duration = new Date(previousAppointment.ends_at).getTime() - new Date(previousAppointment.starts_at).getTime();
+    const { error } = await supabase.rpc("update_flexible_appointment_time", {
       target_organization_id: workspace.organizationId,
       target_appointment_id: parsed.data.appointmentId,
       target_starts_at: parsed.data.startsAt.toISOString(),
+      target_ends_at: new Date(parsed.data.startsAt.getTime() + duration).toISOString(),
+      target_action: "appointment.rescheduled",
     });
     if (error?.code === "23P01") return { status: "error", message: "Esse horário já está ocupado." };
     if (error) throw error;
-    if (previousAppointment?.starts_at && pendingReminders?.length) {
-      const previousStart = new Date(previousAppointment.starts_at).getTime();
-      const nextStart = parsed.data.startsAt.getTime();
-      await Promise.all(pendingReminders.map((reminder) => {
-        const offset = previousStart - new Date(reminder.scheduled_for).getTime();
-        return supabase.from("notification_jobs").update({ scheduled_for: new Date(nextStart - offset).toISOString() }).eq("id", reminder.id).eq("organization_id", workspace.organizationId);
-      }));
-    }
     revalidatePath("/agenda");
     revalidatePath("/dashboard");
     revalidatePath("/relatorios");
@@ -271,6 +262,7 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
     bookingNotice: z.coerce.number().int().min(0).max(10080),
     cancellationNotice: z.coerce.number().int().min(0).max(43200),
     agendaDays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+    slotIntervalMinutes: z.coerce.number().int().refine((value) => [10, 15, 30, 60].includes(value)),
     selectedServices: z.array(z.string().trim().min(2).max(120)).min(1).max(12),
     workflowNames: z.array(z.string().trim().min(2).max(80)).min(2).max(10),
   }).safeParse({
@@ -286,6 +278,7 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
     bookingNotice: formData.get("bookingNotice"),
     cancellationNotice: formData.get("cancellationNotice"),
     agendaDays: parseJsonArray(formData.get("agendaDays")),
+    slotIntervalMinutes: formData.get("slotIntervalMinutes"),
     selectedServices: parseJsonArray(formData.get("selectedServices")),
     workflowNames: parseJsonArray(formData.get("workflowNames")),
   });
@@ -302,7 +295,7 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
   try {
     const { workspace, supabase } = await tenantContext();
     const preferences = {
-      agenda: { startsAt: parsed.data.agendaStart, endsAt: parsed.data.agendaEnd, days: parsed.data.agendaDays },
+      agenda: { startsAt: parsed.data.agendaStart, endsAt: parsed.data.agendaEnd, days: parsed.data.agendaDays, slotIntervalMinutes: parsed.data.slotIntervalMinutes },
       notifications: {
         reminder24: formData.get("reminder24") === "true",
         reminder2: formData.get("reminder2") === "true",
@@ -373,6 +366,23 @@ export async function saveOrganizationSettings(_: ActionState, formData: FormDat
   } catch { return { status: "error", message: "Não foi possível salvar todas as configurações. Tente novamente." }; }
 }
 
+export async function updateFlexibleAppointment(_: ActionState, formData: FormData): Promise<ActionState> {
+  const optionalUuid = z.string().uuid().optional().or(z.literal(""));
+  const parsed = z.object({ appointmentId: z.string().uuid(), title: z.string().trim().min(2).max(120), description: z.string().trim().max(1000).optional().or(z.literal("")), location: z.string().trim().max(240).optional().or(z.literal("")), color: z.string().regex(/^#[0-9a-f]{6}$/i), customerId: optionalUuid, serviceId: optionalUuid, startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/), endsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/), notes: z.string().trim().max(1000).optional().or(z.literal("")) }).safeParse(Object.fromEntries(["appointmentId","title","description","location","color","customerId","serviceId","startsAt","endsAt","notes"].map((key) => [key, formData.get(key)])));
+  if (!parsed.success) return { status: "error", message: "Revise os dados do evento antes de salvar." };
+  try {
+    const { workspace, supabase } = await tenantContext();
+    const { data: organization } = await supabase.from("organizations").select("timezone").eq("id", workspace.organizationId).single();
+    const startsAt = localDateTimeToIso(parsed.data.startsAt, organization?.timezone ?? "America/Sao_Paulo");
+    const endsAt = localDateTimeToIso(parsed.data.endsAt, organization?.timezone ?? "America/Sao_Paulo");
+    const { error } = await supabase.rpc("update_flexible_appointment", { target_organization_id: workspace.organizationId, target_appointment_id: parsed.data.appointmentId, target_title: parsed.data.title, target_description: parsed.data.description || null, target_location: parsed.data.location || null, target_color: parsed.data.color, target_customer_id: parsed.data.customerId || null, target_service_id: parsed.data.serviceId || null, target_starts_at: startsAt, target_ends_at: endsAt, target_notes: parsed.data.notes || null });
+    if (error?.code === "23P01") return { status: "error", message: "O novo período conflita com outro evento." };
+    if (error) throw error;
+    revalidatePath("/agenda"); revalidatePath("/dashboard"); revalidatePath("/relatorios");
+    return { status: "success", message: "Evento atualizado." };
+  } catch (error) { return { status: "error", message: error instanceof Error ? error.message : "Falha ao atualizar evento." }; }
+}
+
 export async function resizeAppointment(appointmentId: string, durationMinutes: number): Promise<ActionState> {
   const parsed = z.object({
     appointmentId: z.string().uuid(),
@@ -392,11 +402,10 @@ export async function resizeAppointment(appointmentId: string, durationMinutes: 
     if (!appointment?.starts_at) return { status: "error", message: "Agendamento não encontrado neste espaço." };
 
     const endsAt = new Date(new Date(appointment.starts_at).getTime() + parsed.data.durationMinutes * 60_000);
-    const { error } = await supabase
-      .from("appointments")
-      .update({ ends_at: endsAt.toISOString() })
-      .eq("organization_id", workspace.organizationId)
-      .eq("id", parsed.data.appointmentId);
+    const { error } = await supabase.rpc("update_flexible_appointment_time", {
+      target_organization_id: workspace.organizationId, target_appointment_id: parsed.data.appointmentId,
+      target_starts_at: appointment.starts_at, target_ends_at: endsAt.toISOString(), target_action: "appointment.resized",
+    });
     if (error?.code === "23P01") return { status: "error", message: "A nova duração invade outro atendimento." };
     if (error) throw new Error(error.message);
     revalidatePath("/agenda");

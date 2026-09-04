@@ -42,7 +42,7 @@ export default async function ConfiguracoesPage() {
   ]);
 
   const preferences = (organization?.preferences ?? {}) as {
-    agenda?: { startsAt?: string; endsAt?: string };
+    agenda?: { startsAt?: string; endsAt?: string; slotIntervalMinutes?: 10 | 15 | 30 | 60 };
     notifications?: { reminder24?: boolean; reminder2?: boolean; dailyDigest?: boolean };
   };
   const logoUrl = theme?.logo_path
@@ -64,6 +64,7 @@ export default async function ConfiguracoesPage() {
       bookingNotice: String(organization?.booking_notice_minutes ?? 60),
       cancellationNotice: String(organization?.cancellation_notice_minutes ?? 240),
       days: availability?.length ? [...new Set(availability.map((rule) => rule.weekday))] : [1, 2, 3, 4, 5, 6],
+      slotIntervalMinutes: preferences.agenda?.slotIntervalMinutes ?? 30,
     },
     notifications: {
       reminder24: preferences.notifications?.reminder24 ?? true,

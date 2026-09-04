@@ -11,8 +11,10 @@ export function brazilTodayKey(now = new Date()) {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
-export function dateKeyInBrazil(value: string | Date) {
-  return brazilTodayKey(typeof value === "string" ? new Date(value) : value);
+export function dateKeyInBrazil(value: string | Date, timeZone = SAO_PAULO_TIME_ZONE) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(typeof value === "string" ? new Date(value) : value);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 export function mondayOfWeek(dateKey: string) {
