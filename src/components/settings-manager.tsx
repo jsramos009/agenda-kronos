@@ -4,7 +4,7 @@ import { FormEvent, useActionState, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Bell, Check, Clock3, Columns3, ImagePlus, LockKeyhole, Palette, Plug, RotateCcw, UsersRound } from "lucide-react";
-import { saveOrganizationSettings, type ActionState } from "@/app/(workspace)/actions";
+import { saveAgendaSettings, saveOrganizationSettings, type ActionState } from "@/app/(workspace)/actions";
 import { useNiche } from "@/components/niche-provider";
 import { PageHeader } from "@/components/ui";
 import { nicheList, niches, type NicheId } from "@/lib/niches";
@@ -35,6 +35,9 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
   const [workflowNames, setWorkflowNames] = useState(initialSettings?.workflowNames.length ? initialSettings.workflowNames : niche.workflow.map((stage) => stage.name));
   const [logoPreview, setLogoPreview] = useState(initialSettings?.logoUrl ?? "");
   const [state, action, pending] = useActionState(saveOrganizationSettings, initialState);
+  const [agendaState, agendaAction, agendaPending] = useActionState(saveAgendaSettings, initialState);
+  const activeState = tab === "Agenda" ? agendaState : state;
+  const activePending = tab === "Agenda" ? agendaPending : pending;
 
   useEffect(() => () => {
     if (logoPreview.startsWith("blob:")) URL.revokeObjectURL(logoPreview);
@@ -66,7 +69,7 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
     <PageHeader eyebrow="Sistema · Personalização" title="Configurações" description="Marca, agenda, equipe e regras de operação em uma sequência contínua." action={null} />
     <section className="settings-layout" style={previewStyle}>
       <nav aria-label="Seções das configurações">{tabs.map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}{!demo ? <Link href="/configuracoes/integracoes" prefetch><Plug size={15} /> Integrações</Link> : null}</nav>
-      <form action={demo ? undefined : action} onSubmit={saveDemo} className="settings-panel">
+      <form action={demo ? undefined : tab === "Agenda" ? agendaAction : action} onSubmit={saveDemo} className="settings-panel">
         <input type="hidden" name="companyName" value={companyName} />
         <input type="hidden" name="description" value={description} />
         <input type="hidden" name="nicheId" value={nicheId} />
@@ -96,9 +99,9 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
         {tab === "Notificações" ? <SettingsSection icon={<Bell />} title="Lembretes" text="Escolha quais automações serão preparadas para cada agendamento."><Toggle label="Lembrete 24 horas antes" checked={notifications.reminder24} onChange={(checked) => setNotifications((value) => ({ ...value, reminder24: checked }))} /><Toggle label="Lembrete 2 horas antes" checked={notifications.reminder2} onChange={(checked) => setNotifications((value) => ({ ...value, reminder2: checked }))} /><Toggle label="Resumo diário da operação" checked={notifications.dailyDigest} onChange={(checked) => setNotifications((value) => ({ ...value, dailyDigest: checked }))} /></SettingsSection> : null}
         {tab === "Kanban" ? <SettingsSection icon={<Columns3 />} title="Etapas visíveis" text="Edite os nomes sem perder os estados internos ligados à agenda.">{workflowNames.map((stage, index) => <label className="field" key={index}><span>Etapa {index + 1}</span><input value={stage} maxLength={80} onChange={(event) => setWorkflowNames((current) => current.map((name, itemIndex) => itemIndex === index ? event.target.value : name))} /></label>)}</SettingsSection> : null}
         {tab === "Segurança" ? <SettingsSection icon={<LockKeyhole />} title="Segurança da conta" text="Sessões, papéis e dados são isolados por organização."><div className="security-list"><p><Check size={15} /> Políticas de acesso por tenant</p><p><Check size={15} /> Histórico de alterações administrativas</p><p><Check size={15} /> Recuperação segura de senha</p></div><a className="button button--secondary" href="/recuperar-senha">Redefinir minha senha</a></SettingsSection> : null}
-        <footer><button type="button" className="button button--ghost" onClick={restore}><RotateCcw size={16} /> Restaurar modelo</button><button className="button button--primary" disabled={pending}>{pending ? "Salvando…" : "Salvar alterações"}</button>{(message || state.message) ? <span className={`action-feedback action-feedback--${state.status === "error" ? "error" : "success"}`}>{message || state.message}</span> : null}</footer>
+        <footer><button type="button" className="button button--ghost" onClick={restore}><RotateCcw size={16} /> Restaurar modelo</button><button className="button button--primary" disabled={activePending}>{activePending ? "Salvando…" : "Salvar alterações"}</button>{(message || activeState.message) ? <span className={`action-feedback action-feedback--${activeState.status === "error" ? "error" : "success"}`}>{message || activeState.message}</span> : null}</footer>
       </form>
-      <aside className="settings-preview"><p className="eyebrow">Prévia do workspace</p><div className="preview-card"><span>Hoje · 10:30</span><h3>Maria Santos</h3><p>{niche.services[0].name}</p><div><em>Confirmado</em><strong>{niche.services[0].duration}</strong></div></div><button className="button button--primary" type="button">Ação principal</button><small>A marca Kronos permanece constante; a operação acompanha o seu nicho.</small></aside>
+      <aside className="settings-preview"><p className="eyebrow">Prévia do workspace</p><div className="preview-card"><span>Hoje · 10:30</span><h3>Maria Santos</h3><p>{niche.services[0].name}</p><div><em>Confirmado</em><strong>{niche.services[0].duration}</strong></div></div><small>A marca Kronos permanece constante; a operação acompanha o seu nicho.</small></aside>
     </section>
   </>;
 }

@@ -610,7 +610,7 @@ export async function saveOrganizationSettings(
       .from("workflow_stages")
       .select("id")
       .eq("organization_id", workspace.organizationId)
-      .eq("active", true)
+      .eq("visible", true)
       .order("position");
     if (stagesError) throw stagesError;
     const stageUpdates = (stages ?? [])
@@ -687,6 +687,59 @@ export async function saveOrganizationSettings(
       message:
         "Não foi possível salvar todas as configurações. Tente novamente.",
     };
+  }
+}
+
+export async function saveAgendaSettings(
+  _: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  let days: unknown;
+  try {
+    days = JSON.parse(String(formData.get("agendaDays") ?? "[]"));
+  } catch {
+    days = null;
+  }
+  const parsed = z.object({
+    agendaStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    agendaEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    agendaDays: z.array(z.number().int().min(0).max(6)).min(1).max(7).refine((value) => new Set(value).size === value.length),
+    slotIntervalMinutes: z.coerce.number().int().refine((value) => [10, 15, 30, 60].includes(value)),
+    bookingNotice: z.coerce.number().int().min(0).max(10080),
+    cancellationNotice: z.coerce.number().int().min(0).max(43200),
+  }).safeParse({
+    agendaStart: formData.get("agendaStart"),
+    agendaEnd: formData.get("agendaEnd"),
+    agendaDays: days,
+    slotIntervalMinutes: formData.get("slotIntervalMinutes"),
+    bookingNotice: formData.get("bookingNotice"),
+    cancellationNotice: formData.get("cancellationNotice"),
+  });
+
+  if (!parsed.success || parsed.data.agendaStart >= parsed.data.agendaEnd) {
+    return { status: "error", message: "Selecione ao menos um dia e informe um expediente válido." };
+  }
+
+  try {
+    const { workspace, supabase } = await tenantContext();
+    if (workspace.roleKey !== "owner" && workspace.roleKey !== "admin") {
+      return { status: "error", message: "Somente proprietários e administradores podem alterar a agenda." };
+    }
+    const { error } = await supabase.rpc("update_organization_availability_v1", {
+      target_organization_id: workspace.organizationId,
+      target_days: parsed.data.agendaDays,
+      target_starts_at: parsed.data.agendaStart,
+      target_ends_at: parsed.data.agendaEnd,
+      target_slot_interval_minutes: parsed.data.slotIntervalMinutes,
+      target_booking_notice_minutes: parsed.data.bookingNotice,
+      target_cancellation_notice_minutes: parsed.data.cancellationNotice,
+    });
+    if (error) throw error;
+    revalidatePath("/configuracoes");
+    revalidatePath("/agenda");
+    return { status: "success", message: "Agenda e dias de atendimento salvos." };
+  } catch {
+    return { status: "error", message: "Não foi possível salvar a agenda. Atualize a página e tente novamente." };
   }
 }
 
