@@ -18,7 +18,8 @@ const demo: DashboardData = {
 
 export default async function DashboardPage() {
   const workspace = await getCurrentWorkspace();
-  if (!workspace?.organizationId) return <DashboardView data={demo} />;
+  const localHour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
+  if (!workspace?.organizationId) return <DashboardView data={demo} userName={workspace?.fullName ?? "Ana"} localHour={localHour} />;
 
   const supabase = await createClient();
   const today = brazilTodayKey();
@@ -54,7 +55,7 @@ export default async function DashboardPage() {
       service: relationName(row.services),
     })),
   };
-  return <DashboardView data={data} />;
+  return <DashboardView data={data} userName={workspace.fullName} localHour={localHour} />;
 }
 
 function firstRelation<T>(value: T | T[] | null): T | null { return Array.isArray(value) ? value[0] ?? null : value; }

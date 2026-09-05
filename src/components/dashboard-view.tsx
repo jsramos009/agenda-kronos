@@ -3,6 +3,7 @@
 import { CalendarCheck2, CircleCheckBig, ClockArrowUp, UsersRound } from "lucide-react";
 import { useNiche } from "@/components/niche-provider";
 import { PageHeader, SectionHeading, StatCard, TimeRail } from "@/components/ui";
+import { dashboardGreeting } from "@/lib/dashboard-greeting";
 
 export type DashboardData = {
   today: number;
@@ -13,12 +14,13 @@ export type DashboardData = {
   upcoming: { id: string; time: string; client: string; service: string }[];
 };
 
-export function DashboardView({ data }: { data: DashboardData }) {
+export function DashboardView({ data, userName, localHour }: { data: DashboardData; userName: string; localHour: number }) {
   const { companyName, niche } = useNiche();
+  const greeting = dashboardGreeting(localHour, userName, data.upcoming.length);
   return (
     <>
       <TimeRail />
-      <PageHeader eyebrow={`${companyName} · ${niche.label}`} title="Bom dia." description="Agenda, execução e próximos horários usam os mesmos dados da operação." actionHref="/agenda" />
+      <PageHeader eyebrow={`${companyName} · ${niche.label}`} title={greeting.headline} description={greeting.welcome} actionHref="/agenda" />
       <section className="stats-grid">
         <StatCard href="/relatorios?metrica=atendimentos" label="Atendimentos hoje" value={pad(data.today)} delta="Agenda do dia" icon={<UsersRound size={19} />} />
         <StatCard href="/atendimentos" label="Em andamento" value={pad(data.inProgress)} delta="Atualizado pelo kanban" icon={<ClockArrowUp size={19} />} />
@@ -34,6 +36,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
         </div>
         <div className="panel">
           <SectionHeading title="Próximos horários" link="Ver agenda" href="/agenda" />
+          <p className="dashboard-schedule-message">{greeting.scheduleMessage}</p>
           <div className="appointment-list">
             {data.upcoming.length ? data.upcoming.map((appointment) => <article key={appointment.id}><time>{appointment.time}</time><div><strong>{appointment.client}</strong><span>{appointment.service}</span></div><i /></article>) : <p className="muted-copy">Nenhum próximo horário.</p>}
           </div>
