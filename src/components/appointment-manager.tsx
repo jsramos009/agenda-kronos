@@ -12,6 +12,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import {
   Bell,
   CalendarDays,
@@ -1062,8 +1063,10 @@ export function AppointmentManager({
           )}
         </section>
       ) : null}
-      {draft ? (
-        <>
+      {draft ? createPortal(
+        <div className="calendar-modal-layer" style={Object.fromEntries(
+          ["--tenant-primary", "--tenant-accent", "--tenant-soft", "--tenant-line"].map((name) => [name, getComputedStyle(document.querySelector(".tenant-root") ?? document.documentElement).getPropertyValue(name)]),
+        ) as React.CSSProperties}>
           <button
             className="calendar-popover-backdrop"
             onClick={() => {
@@ -1392,7 +1395,8 @@ export function AppointmentManager({
               </footer>
             </form>
           </section>
-        </>
+        </div>,
+        document.body,
       ) : null}
       {selectedEvent ? (
         <>

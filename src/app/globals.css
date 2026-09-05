@@ -4535,8 +4535,19 @@ td {
   backdrop-filter: blur(3px);
   cursor: default;
 }
+.calendar-modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 100);
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  isolation: isolate;
+}
+.calendar-modal-layer .calendar-popover-backdrop { position: absolute; inset: 0; z-index: -1; }
+.calendar-modal-layer .calendar-quick-create { position: relative; inset: auto; transform: none; margin: 0; }
 .calendar-quick-create {
-  width: min(480px, calc(100vw - 28px));
+  width: min(640px, calc(100vw - 28px));
   max-height: calc(100dvh - 32px);
   padding: 20px;
   border: 1px solid rgba(255, 255, 255, 0.8);
