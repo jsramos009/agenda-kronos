@@ -25,7 +25,7 @@ export default async function ConfiguracoesPage() {
       .from("availability_rules")
       .select("weekday, starts_at, ends_at")
       .eq("organization_id", organizationId)
-      .eq("visible", true)
+      .eq("active", true)
       .order("weekday")
       .limit(7),
     supabase
@@ -37,7 +37,7 @@ export default async function ConfiguracoesPage() {
       .from("workflow_stages")
       .select("name")
       .eq("organization_id", organizationId)
-      .eq("active", true)
+      .eq("visible", true)
       .order("position"),
   ]);
 
