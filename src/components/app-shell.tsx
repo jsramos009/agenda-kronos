@@ -97,6 +97,7 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
   const [open, setOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const sourceInsightSignature = unreadInsightIds.join("|");
   const [insightBadge, setInsightBadge] = useState(() => ({ sourceSignature: sourceInsightSignature, sourceIds: new Set(unreadInsightIds), overrides: new Map<string, boolean>() }));
   const isMobileShell = useSyncExternalStore(subscribeToMobileShell, getMobileShellSnapshot, getServerMobileShellSnapshot);
@@ -107,6 +108,8 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
   const workspacePanelRef = useRef<HTMLDivElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const accountPanelRef = useRef<HTMLDivElement>(null);
+  const mobileActionButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileActionPanelRef = useRef<HTMLElement>(null);
   const canAdminister = roleKey === "owner" || roleKey === "admin" || demo;
   const currentRoute = Object.keys(routeContext).find((route) => pathname === route || pathname.startsWith(`${route}/`));
   if (insightBadge.sourceSignature !== sourceInsightSignature) {
@@ -143,6 +146,12 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
   }, [accountMenuOpen]);
 
   useEffect(() => {
+    if (!mobileActionsOpen) return;
+    const frame = window.requestAnimationFrame(() => mobileActionPanelRef.current?.querySelector<HTMLElement>("a")?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [mobileActionsOpen]);
+
+  useEffect(() => {
     const closeMenus = (event: KeyboardEvent) => {
       if (event.key === "Tab" && open && isMobileShell) {
         const focusable = Array.from(sidebarRef.current?.querySelectorAll<HTMLElement>(
@@ -165,6 +174,11 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
         return;
       }
       if (event.key !== "Escape") return;
+      if (mobileActionsOpen) {
+        setMobileActionsOpen(false);
+        mobileActionButtonRef.current?.focus();
+        return;
+      }
       if (workspaceMenuOpen) {
         setWorkspaceMenuOpen(false);
         workspaceButtonRef.current?.focus();
@@ -182,7 +196,7 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
     };
     window.addEventListener("keydown", closeMenus);
     return () => window.removeEventListener("keydown", closeMenus);
-  }, [accountMenuOpen, isMobileShell, open, workspaceMenuOpen]);
+  }, [accountMenuOpen, isMobileShell, mobileActionsOpen, open, workspaceMenuOpen]);
 
   return (
     <div className="app-shell">
@@ -250,8 +264,26 @@ export function AppShell({ children, fullName = "Ana Martins", role = "Administr
         </div>
         <main className="page-content">{children}</main>
       </div>
+      {mobileActionsOpen ? <button className="mobile-quick-actions__backdrop" type="button" aria-label="Fechar ações rápidas" onClick={() => setMobileActionsOpen(false)} /> : null}
+      {mobileActionsOpen ? <section ref={mobileActionPanelRef} id="mobile-quick-actions" className="mobile-quick-actions" role="dialog" aria-modal="true" aria-label="Criar novo item">
+        <header><div><small>Ação rápida</small><strong>O que deseja criar?</strong></div><button type="button" className="icon-button" aria-label="Fechar" onClick={() => { setMobileActionsOpen(false); mobileActionButtonRef.current?.focus(); }}><X size={18} /></button></header>
+        <Link href="/agenda?novo=1" onClick={() => setMobileActionsOpen(false)}><span><CalendarDays size={21} /></span><div><strong>Novo agendamento</strong><small>Escolha cliente, serviço, data e horário</small></div><ArrowRight size={18} /></Link>
+        <Link href="/pagamentos#nova-cobranca" onClick={() => setMobileActionsOpen(false)}><span><ReceiptText size={21} /></span><div><strong>Nova cobrança</strong><small>Emita um boleto para seu cliente</small></div><ArrowRight size={18} /></Link>
+      </section> : null}
+      <nav className="mobile-bottom-nav" aria-label="Navegação principal do celular">
+        <MobileNavLink href="/dashboard" label="Visão geral" pathname={pathname} icon={LayoutDashboard} onNavigate={() => setMobileActionsOpen(false)} />
+        <MobileNavLink href="/agenda" label="Agenda" pathname={pathname} icon={CalendarDays} onNavigate={() => setMobileActionsOpen(false)} />
+        <button ref={mobileActionButtonRef} type="button" className={`mobile-bottom-nav__create ${mobileActionsOpen ? "active" : ""}`} aria-label="Criar novo" aria-haspopup="dialog" aria-expanded={mobileActionsOpen} aria-controls="mobile-quick-actions" onClick={() => setMobileActionsOpen((value) => !value)}><Plus size={27} strokeWidth={2.2} /></button>
+        <MobileNavLink href="/atendimentos" label="Atendimentos" pathname={pathname} icon={SquareKanban} onNavigate={() => setMobileActionsOpen(false)} />
+        <MobileNavLink href="/clientes" label="Clientes" pathname={pathname} icon={ContactRound} onNavigate={() => setMobileActionsOpen(false)} />
+      </nav>
     </div>
   );
+}
+
+function MobileNavLink({ href, label, pathname, icon: Icon, onNavigate }: { href: string; label: string; pathname: string; icon: typeof LayoutDashboard; onNavigate: () => void }) {
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  return <Link href={href} className={active ? "active" : ""} aria-current={active ? "page" : undefined} onClick={onNavigate}><Icon size={20} strokeWidth={active ? 2.2 : 1.8} /><span>{label}</span></Link>;
 }
 
 function LiveDate() {

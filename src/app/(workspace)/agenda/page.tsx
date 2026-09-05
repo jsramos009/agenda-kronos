@@ -11,7 +11,7 @@ import { getCurrentWorkspace } from "@/lib/workspace";
 import { localDateTimeToIso, minutesBetween, normalizeSlotInterval, timeToMinutes } from "@/lib/calendar-grid";
 
 type AgendaPageProps = {
-  searchParams: Promise<{ week?: string; date?: string; view?: string }>;
+  searchParams: Promise<{ week?: string; date?: string; view?: string; novo?: string }>;
 };
 
 export default async function AgendaPage({ searchParams }: AgendaPageProps) {
@@ -91,7 +91,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
   }
 
   const instanceKey = `${weekStart}:${events.map((event) => `${event.id}-${event.startsAt}`).join("|")}`;
-  return <AppointmentManager key={instanceKey} events={events} customers={customers} services={services} demo={!workspace?.organizationId} weekStart={weekStart} anchorDate={anchorDate} today={today} initialView={initialView} allowedWeekdays={allowedWeekdays} workingHours={workingHours} slotInterval={slotInterval} timeZone={timeZone} />;
+  return <AppointmentManager key={instanceKey} events={events} customers={customers} services={services} demo={!workspace?.organizationId} weekStart={weekStart} anchorDate={anchorDate} today={today} initialView={initialView} allowedWeekdays={allowedWeekdays} workingHours={workingHours} slotInterval={slotInterval} timeZone={timeZone} openNewEvent={params.novo === "1"} />;
 }
 
 function demoEventsFor(weekStart: string): CalendarEvent[] {

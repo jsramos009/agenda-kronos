@@ -190,7 +190,7 @@ export function PaymentManager({
         <article><span><TriangleAlert size={18} /></span><small>Vencido</small><strong>{money(totals.overdue)}</strong><p>Cobranças que pedem acompanhamento</p></article>
       </section>
 
-      <section className="billing-issue-panel billing-issue-panel--wide">
+      <section id="nova-cobranca" className="billing-issue-panel billing-issue-panel--wide">
           <header><span><CircleDollarSign size={19} /></span><div><h2>Gerar boleto</h2><p>A cobrança ficará registrada no histórico do cliente.</p></div></header>
           {!connection.connected ? <div className="billing-empty-lock"><Landmark size={23} /><strong>Conecte o Asaas para começar</strong><span>O formulário será liberado após validar a conta.</span></div> : !canCreate ? <div className="billing-empty-lock"><ShieldCheck size={23} /><strong>Perfil somente para consulta</strong><span>Administradores e recepção podem emitir cobranças.</span></div> : customers.length === 0 ? <div className="billing-empty-lock"><Banknote size={23} /><strong>Nenhum cliente cadastrado</strong><span>Cadastre um cliente antes de emitir o primeiro boleto.</span><Link className="button button--secondary" href="/clientes">Ir para clientes</Link></div> : (
             <form ref={createForm} action={demo ? undefined : chargeAction} onSubmit={stopDemo} className="billing-issue-form">

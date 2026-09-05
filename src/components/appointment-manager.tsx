@@ -123,6 +123,7 @@ export function AppointmentManager({
   workingHours,
   slotInterval: rawSlotInterval,
   timeZone,
+  openNewEvent = false,
 }: {
   events: CalendarEvent[];
   customers: AppointmentOption[];
@@ -136,6 +137,7 @@ export function AppointmentManager({
   workingHours: { start: string; end: string };
   slotInterval: SlotInterval;
   timeZone: string;
+  openNewEvent?: boolean;
 }) {
   const router = useRouter();
   const { niche } = useNiche();
@@ -184,6 +186,7 @@ export function AppointmentManager({
   const [quickCustomerMessage, setQuickCustomerMessage] = useState("");
   const dialogRef = useRef<HTMLElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const openedFromQuickAction = useRef(false);
   const [pendingIds, setPendingIds] = useState(() => new Set<string>());
   const pendingIdsRef = useRef(pendingIds);
   const [isUpdating, startUpdating] = useTransition();
@@ -252,6 +255,14 @@ export function AppointmentManager({
       anchorY: anchor?.y,
     });
   };
+  useEffect(() => {
+    if (!openNewEvent || openedFromQuickAction.current) return;
+    openedFromQuickAction.current = true;
+    openDraft(anchorDate);
+    router.replace(calendarRoute(view, anchorDate), { scroll: false });
+    // A ação deve ocorrer apenas na entrada feita pelo botão rápido.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openNewEvent]);
   if (model.signature !== signature)
     setModel({
       signature,
