@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const publicPaths = ["/", "/entrar", "/criar-conta", "/recuperar-senha", "/faq", "/privacidade", "/termos", "/auth", "/agendar", "/demonstracao"];
+const publicPaths = ["/", "/entrar", "/criar-conta", "/recuperar-senha", "/faq", "/privacidade", "/termos", "/auth", "/agendar", "/demonstracao", "/recibo"];
 
 export async function proxy(request: NextRequest) {
   // Provider callbacks authenticate with their own secret header in the route.

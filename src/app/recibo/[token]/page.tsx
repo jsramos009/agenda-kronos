@@ -1,6 +1,12 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { ReceiptDocument } from "@/components/receipt-document";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+export const metadata: Metadata = {
+  title: "Recibo digital | Kronos",
+  robots: { index: false, follow: false },
+};
 
 export default async function PublicReceiptPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
