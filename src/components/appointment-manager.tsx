@@ -197,6 +197,7 @@ export function AppointmentManager({
       if (result.status === "success") {
         setDraft(null);
         setFeedback(result.message);
+        router.refresh();
         returnFocusRef.current?.focus();
       }
       return result;
@@ -1139,7 +1140,6 @@ export function AppointmentManager({
                     titleDirty.current = true;
                     setTitleDraft(event.target.value);
                   }}
-                  required
                 />
               </label>
               <label className="field">
@@ -1385,6 +1385,11 @@ export function AppointmentManager({
                   }
                 />
               </label>
+              {state.message && state.status === "error" ? (
+                <div className="action-feedback action-feedback--error field--wide" role="alert">
+                  {state.message}
+                </div>
+              ) : null}
               <footer>
                 <button
                   type="button"

@@ -183,7 +183,6 @@ export async function createAppointment(
           .from("workflow_stages")
           .select("id")
           .eq("organization_id", workspace.organizationId)
-          .eq("active", true)
           .eq("visible", true)
           .order("position")
           .limit(1)
@@ -230,6 +229,8 @@ export async function createAppointment(
         throw new Error(
           "Esse profissional já possui um atendimento no horário escolhido.",
         );
+      if (error.message.includes("workflow_stages.active"))
+        throw new Error("A etapa inicial da agenda estava inválida. Atualize a página e tente novamente.");
       throw new Error(error.message);
     }
     revalidatePath("/agenda");
