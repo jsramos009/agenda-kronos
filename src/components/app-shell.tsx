@@ -28,6 +28,7 @@ import {
   UserCog,
   Plus,
   ReceiptText,
+  FileText,
   X,
   Crown,
 } from "lucide-react";
@@ -46,6 +47,7 @@ const navigation = [
   { href: "/clientes", label: "Clientes", icon: ContactRound },
   { href: "/servicos", label: "Serviços", icon: Tags },
   { href: "/pagamentos", label: "Pagamentos", icon: ReceiptText },
+  { href: "/recibos", label: "Recibos", icon: FileText },
   { href: "/insights", label: "Insights", icon: Lightbulb },
   { href: "/conhecimento", label: "Conhecimento", icon: BookOpen },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
@@ -72,6 +74,7 @@ const routeContext: Record<string, string> = {
   "/clientes": "Clientes",
   "/servicos": "Serviços",
   "/pagamentos": "Pagamentos",
+  "/recibos": "Recibos",
   "/insights": "Insights",
   "/conhecimento": "Conhecimento",
   "/relatorios": "Relatórios",

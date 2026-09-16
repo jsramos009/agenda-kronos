@@ -3,13 +3,14 @@
 import { FormEvent, useActionState, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Bell, Check, Clock3, Columns3, ImagePlus, LockKeyhole, Palette, Plug, RotateCcw, UsersRound } from "lucide-react";
+import { Bell, Check, Clock3, Columns3, ImagePlus, KeyRound, LockKeyhole, Palette, Plug, RotateCcw, UsersRound } from "lucide-react";
 import { saveAgendaSettings, saveOrganizationSettings, type ActionState } from "@/app/(workspace)/actions";
+import { savePixSettings } from "@/app/(workspace)/recibos/actions";
 import { useNiche } from "@/components/niche-provider";
 import { PageHeader } from "@/components/ui";
 import { nicheList, niches, type NicheId } from "@/lib/niches";
 
-const tabs = ["Empresa e marca", "Nicho e modelos", "Agenda", "Equipe e acesso", "Notificações", "Kanban", "Segurança"] as const;
+const tabs = ["Empresa e marca", "Nicho e modelos", "Agenda", "Pix e recibos", "Equipe e acesso", "Notificações", "Kanban", "Segurança"] as const;
 type Tab = typeof tabs[number];
 const initialState: ActionState = { status: "idle", message: "" };
 
@@ -21,6 +22,7 @@ type SettingsValues = {
   notifications: { reminder24: boolean; reminder2: boolean; dailyDigest: boolean };
   selectedServices: string[];
   workflowNames: string[];
+  pix: { keyType: "cpf" | "cnpj" | "email" | "phone" | "random"; pixKey: string; merchantName: string; merchantCity: string };
 };
 
 export function SettingsManager({ demo, initialSettings }: { demo: boolean; initialSettings: SettingsValues | null }) {
@@ -34,10 +36,12 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
   const [selectedServices, setSelectedServices] = useState(initialSettings?.selectedServices.length ? initialSettings.selectedServices : niche.services.map((service) => service.name));
   const [workflowNames, setWorkflowNames] = useState(initialSettings?.workflowNames.length ? initialSettings.workflowNames : niche.workflow.map((stage) => stage.name));
   const [logoPreview, setLogoPreview] = useState(initialSettings?.logoUrl ?? "");
+  const [pix, setPix] = useState(initialSettings?.pix ?? { keyType: "random" as const, pixKey: "", merchantName: companyName.slice(0, 25), merchantCity: "São Paulo" });
   const [state, action, pending] = useActionState(saveOrganizationSettings, initialState);
   const [agendaState, agendaAction, agendaPending] = useActionState(saveAgendaSettings, initialState);
-  const activeState = tab === "Agenda" ? agendaState : state;
-  const activePending = tab === "Agenda" ? agendaPending : pending;
+  const [pixState, pixAction, pixPending] = useActionState(savePixSettings, initialState);
+  const activeState = tab === "Agenda" ? agendaState : tab === "Pix e recibos" ? pixState : state;
+  const activePending = tab === "Agenda" ? agendaPending : tab === "Pix e recibos" ? pixPending : pending;
 
   useEffect(() => () => {
     if (logoPreview.startsWith("blob:")) URL.revokeObjectURL(logoPreview);
@@ -69,7 +73,7 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
     <PageHeader eyebrow="Sistema · Personalização" title="Configurações" description="Marca, agenda, equipe e regras de operação em uma sequência contínua." action={null} />
     <section className="settings-layout" style={previewStyle}>
       <nav aria-label="Seções das configurações">{tabs.map((item) => <button type="button" key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}{!demo ? <Link href="/configuracoes/integracoes" prefetch><Plug size={15} /> Integrações</Link> : null}</nav>
-      <form action={demo ? undefined : tab === "Agenda" ? agendaAction : action} onSubmit={saveDemo} className="settings-panel">
+      <form action={demo ? undefined : tab === "Agenda" ? agendaAction : tab === "Pix e recibos" ? pixAction : action} onSubmit={saveDemo} className="settings-panel">
         <input type="hidden" name="companyName" value={companyName} />
         <input type="hidden" name="description" value={description} />
         <input type="hidden" name="nicheId" value={nicheId} />
@@ -88,6 +92,10 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
         <input type="hidden" name="dailyDigest" value={String(notifications.dailyDigest)} />
         <input type="hidden" name="selectedServices" value={JSON.stringify(selectedServices)} />
         <input type="hidden" name="workflowNames" value={JSON.stringify(workflowNames)} />
+        <input type="hidden" name="keyType" value={pix.keyType} />
+        <input type="hidden" name="pixKey" value={pix.pixKey} />
+        <input type="hidden" name="merchantName" value={pix.merchantName} />
+        <input type="hidden" name="merchantCity" value={pix.merchantCity} />
 
         {tab === "Empresa e marca" ? <>
           <section><div className="settings-heading"><div><h2>Dados da empresa</h2><p>Essas informações identificam o workspace em toda a operação.</p></div></div><div className="form-grid"><label className="field"><span>Nome da empresa</span><input value={companyName} onChange={(event) => setCompanyName(event.target.value)} /></label><label className="field"><span>Nicho atual</span><select value={nicheId} onChange={(event) => changeNiche(event.target.value as NicheId)}>{nicheList.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label><label className="field field--full"><span>Descrição</span><textarea rows={4} maxLength={500} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Explique brevemente como sua empresa atende." /></label></div><label className="settings-logo-uploader"><span>{logoPreview ? <Image src={logoPreview} alt="Prévia do logo da empresa" width={58} height={58} unoptimized /> : <ImagePlus size={26} />}</span><strong>{logoPreview ? "Trocar logo" : "Adicionar logo"}</strong><small>PNG, JPG ou WebP · até 5 MB</small><input name="logo" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) setLogoPreview(URL.createObjectURL(file)); }} /></label></section>
@@ -95,6 +103,7 @@ export function SettingsManager({ demo, initialSettings }: { demo: boolean; init
         </> : null}
         {tab === "Nicho e modelos" ? <SettingsSection icon={<Palette />} title={`Modelos de ${niche.label}`} text={`${niche.services.length} serviços, ${niche.workflow.length} etapas e ${niche.knowledge.length} artigos sugeridos.`}>{niche.services.map((service) => <label className="check-row" key={service.name}><input type="checkbox" checked={selectedServices.includes(service.name)} onChange={(event) => setSelectedServices((current) => event.target.checked ? [...new Set([...current, service.name])] : current.filter((name) => name !== service.name))} /><span>{service.name}</span><small>{service.duration}</small></label>)}</SettingsSection> : null}
         {tab === "Agenda" ? <SettingsSection icon={<Clock3 />} title="Regras da agenda" text="Defina os dias de atendimento, expediente, antecedência e intervalo de cancelamento."><fieldset className="availability-days"><legend>Dias com atendimento</legend><div>{[[1, "Seg"], [2, "Ter"], [3, "Qua"], [4, "Qui"], [5, "Sex"], [6, "Sáb"], [0, "Dom"]].map(([value, label]) => <label key={value}><input type="checkbox" checked={agenda.days.includes(value as number)} onChange={(event) => setAgenda((current) => ({ ...current, days: event.target.checked ? [...current.days, value as number].sort() : current.days.filter((day) => day !== value) }))} /><span>{label}</span></label>)}</div><small>Selecione ao menos um dia. A agenda usa estes dias para indicar disponibilidade.</small></fieldset><div className="form-grid"><label className="field"><span>Início</span><input type="time" value={agenda.start} onChange={(event) => setAgenda((current) => ({ ...current, start: event.target.value }))} /></label><label className="field"><span>Fim</span><input type="time" value={agenda.end} onChange={(event) => setAgenda((current) => ({ ...current, end: event.target.value }))} /></label><label className="field"><span>Intervalo da grade</span><select value={agenda.slotIntervalMinutes} onChange={(event) => setAgenda((current) => ({ ...current, slotIntervalMinutes: Number(event.target.value) as 10 | 15 | 30 | 60 }))}><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="30">30 minutos</option><option value="60">60 minutos</option></select></label><label className="field"><span>Antecedência mínima</span><select value={agenda.bookingNotice} onChange={(event) => setAgenda((current) => ({ ...current, bookingNotice: event.target.value }))}><option value="0">Sem limite</option><option value="60">1 hora</option><option value="240">4 horas</option></select></label><label className="field"><span>Cancelamento online</span><select value={agenda.cancellationNotice} onChange={(event) => setAgenda((current) => ({ ...current, cancellationNotice: event.target.value }))}><option value="60">1 hora antes</option><option value="240">4 horas antes</option><option value="1440">1 dia antes</option></select></label></div></SettingsSection> : null}
+        {tab === "Pix e recibos" ? <SettingsSection icon={<KeyRound />} title="Recebimento por Pix" text="Esta chave será usada para gerar um QR Code com valor e identificação únicos em cada recibo."><div className="form-grid"><label className="field"><span>Tipo de chave</span><select value={pix.keyType} onChange={(event) => setPix((current) => ({ ...current, keyType: event.target.value as typeof current.keyType }))}><option value="cpf">CPF</option><option value="cnpj">CNPJ</option><option value="email">E-mail</option><option value="phone">Telefone</option><option value="random">Chave aleatória</option></select></label><label className="field"><span>Chave Pix</span><input value={pix.pixKey} onChange={(event) => setPix((current) => ({ ...current, pixKey: event.target.value }))} placeholder="Informe a chave cadastrada no banco" /></label><label className="field"><span>Nome do recebedor</span><input value={pix.merchantName} maxLength={25} onChange={(event) => setPix((current) => ({ ...current, merchantName: event.target.value }))} /></label><label className="field"><span>Cidade</span><input value={pix.merchantCity} maxLength={15} onChange={(event) => setPix((current) => ({ ...current, merchantCity: event.target.value }))} /></label></div><div className="settings-note"><LockKeyhole size={16} /><p><strong>Protegido por tenant</strong><span>A chave aparece apenas para usuários autorizados deste workspace e fica registrada na auditoria.</span></p></div></SettingsSection> : null}
         {tab === "Equipe e acesso" ? <SettingsSection icon={<UsersRound />} title="Papéis e permissões" text="Convide pessoas na conta ou revise todos os acessos no painel administrativo."><div className="settings-link-row"><a className="button button--secondary" href="/conta">Conta e equipe</a><a className="button button--secondary" href="/admin">Painel administrativo</a></div></SettingsSection> : null}
         {tab === "Notificações" ? <SettingsSection icon={<Bell />} title="Lembretes" text="Escolha quais automações serão preparadas para cada agendamento."><Toggle label="Lembrete 24 horas antes" checked={notifications.reminder24} onChange={(checked) => setNotifications((value) => ({ ...value, reminder24: checked }))} /><Toggle label="Lembrete 2 horas antes" checked={notifications.reminder2} onChange={(checked) => setNotifications((value) => ({ ...value, reminder2: checked }))} /><Toggle label="Resumo diário da operação" checked={notifications.dailyDigest} onChange={(checked) => setNotifications((value) => ({ ...value, dailyDigest: checked }))} /></SettingsSection> : null}
         {tab === "Kanban" ? <SettingsSection icon={<Columns3 />} title="Etapas visíveis" text="Edite os nomes sem perder os estados internos ligados à agenda.">{workflowNames.map((stage, index) => <label className="field" key={index}><span>Etapa {index + 1}</span><input value={stage} maxLength={80} onChange={(event) => setWorkflowNames((current) => current.map((name, itemIndex) => itemIndex === index ? event.target.value : name))} /></label>)}</SettingsSection> : null}

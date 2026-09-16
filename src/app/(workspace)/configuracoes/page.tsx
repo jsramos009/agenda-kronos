@@ -10,7 +10,7 @@ export default async function ConfiguracoesPage() {
 
   const supabase = await createClient();
   const organizationId = workspace.organizationId;
-  const [{ data: organization }, { data: theme }, { data: availability }, { data: services }, { data: stages }] = await Promise.all([
+  const [{ data: organization }, { data: theme }, { data: availability }, { data: services }, { data: stages }, { data: pix }] = await Promise.all([
     supabase
       .from("organizations")
       .select("description, booking_notice_minutes, cancellation_notice_minutes, preferences")
@@ -39,6 +39,7 @@ export default async function ConfiguracoesPage() {
       .eq("organization_id", organizationId)
       .eq("visible", true)
       .order("position"),
+    supabase.from("organization_pix_settings").select("key_type, pix_key, merchant_name, merchant_city").eq("organization_id", organizationId).maybeSingle(),
   ]);
 
   const preferences = (organization?.preferences ?? {}) as {
@@ -73,5 +74,6 @@ export default async function ConfiguracoesPage() {
     },
     selectedServices: (services ?? []).filter((service) => service.active).map((service) => service.name),
     workflowNames: (stages ?? []).map((stage) => stage.name),
+    pix: { keyType: (pix?.key_type ?? "random") as "cpf" | "cnpj" | "email" | "phone" | "random", pixKey: pix?.pix_key ?? "", merchantName: pix?.merchant_name ?? workspace.companyName.slice(0, 25), merchantCity: pix?.merchant_city ?? "São Paulo" },
   }} />;
 }
