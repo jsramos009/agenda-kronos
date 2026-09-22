@@ -6,6 +6,7 @@ import { niches } from "@/lib/niches";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { localDateTimeToIso } from "@/lib/calendar-grid";
+import { parseCustomerInput } from "@/lib/customer-input";
 
 export type ActionState = {
   status: "idle" | "success" | "error";
@@ -24,23 +25,16 @@ export async function createCustomer(
   _: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = z
-    .object({
-      name: z.string().trim().min(2).max(160),
-      phone: z.string().trim().min(8).max(30).optional().or(z.literal("")),
-      email: z.string().trim().email().optional().or(z.literal("")),
-      consent: z.boolean(),
-    })
-    .safeParse({
+  const parsed = parseCustomerInput({
       name: formData.get("name"),
       phone: formData.get("phone"),
       email: formData.get("email"),
       consent: formData.get("consent") === "on",
     });
-  if (!parsed.success || (!parsed.data.phone && !parsed.data.email))
+  if (!parsed.success)
     return {
       status: "error",
-      message: "Informe nome e ao menos um contato válido.",
+      message: "Revise o nome, telefone ou e-mail informado.",
     };
 
   try {
