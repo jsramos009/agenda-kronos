@@ -14,3 +14,19 @@ export function parseCustomerInput(input: unknown) {
 export function canCreateCustomer(roleKey: string) {
   return ["owner", "admin", "reception"].includes(roleKey);
 }
+
+export type CustomerMembership = {
+  organization_id: string;
+  role: string;
+};
+
+export function selectCustomerMembership(
+  memberships: CustomerMembership[],
+  requestedOrganizationId?: string,
+) {
+  return (
+    memberships.find(
+      (membership) => membership.organization_id === requestedOrganizationId,
+    ) ?? memberships[0]
+  );
+}

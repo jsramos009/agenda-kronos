@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canCreateCustomer, parseCustomerInput } from "./customer-input.ts";
+import {
+  canCreateCustomer,
+  parseCustomerInput,
+  selectCustomerMembership,
+} from "./customer-input.ts";
 
 test("aceita cliente somente com nome", () => {
   const result = parseCustomerInput({ name: "Pedro Fonseca", phone: "", email: "", consent: false });
@@ -24,4 +28,21 @@ test("limita criação aos papéis operacionais autorizados", () => {
   assert.equal(canCreateCustomer("reception"), true);
   assert.equal(canCreateCustomer("professional"), false);
   assert.equal(canCreateCustomer("analyst"), false);
+});
+
+test("seleciona o tenant ativo sem carregar todo o workspace", () => {
+  const memberships = [
+    { organization_id: "org-principal", role: "owner" },
+    { organization_id: "org-secundaria", role: "admin" },
+  ];
+
+  assert.equal(
+    selectCustomerMembership(memberships, "org-secundaria")?.organization_id,
+    "org-secundaria",
+  );
+  assert.equal(
+    selectCustomerMembership(memberships, "tenant-antigo")?.organization_id,
+    "org-principal",
+  );
+  assert.equal(selectCustomerMembership([], "org-principal"), undefined);
 });

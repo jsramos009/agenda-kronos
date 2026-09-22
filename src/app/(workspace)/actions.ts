@@ -1,13 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { niches } from "@/lib/niches";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { localDateTimeToIso } from "@/lib/calendar-grid";
-import { canCreateCustomer, parseCustomerInput } from "@/lib/customer-input";
+import {
+  canCreateCustomer,
+  parseCustomerInput,
+  selectCustomerMembership,
+} from "@/lib/customer-input";
 
 export type ActionState = {
   status: "idle" | "success" | "error";
@@ -20,6 +26,30 @@ async function tenantContext() {
   if (!workspace?.organizationId)
     throw new Error("Conecte o Supabase para salvar dados reais.");
   return { workspace, supabase: await createClient() };
+}
+
+async function customerWriteContext() {
+  const [cookieStore, supabase] = await Promise.all([cookies(), createClient()]);
+  const { data: claimData, error: claimError } = await supabase.auth.getClaims();
+  const userId = claimData?.claims?.sub;
+  if (claimError || !userId) throw new Error("Sua sessão expirou. Entre novamente.");
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from("organization_members")
+    .select("organization_id, role")
+    .eq("user_id", userId)
+    .eq("active", true)
+    .order("created_at");
+  if (membershipError) throw membershipError;
+
+  const membership = selectCustomerMembership(
+    memberships ?? [],
+    cookieStore.get("kronos_workspace")?.value,
+  );
+  if (!membership)
+    throw new Error("Seu usuário não possui um espaço de trabalho ativo.");
+
+  return membership;
 }
 
 export async function createCustomer(
@@ -39,29 +69,28 @@ export async function createCustomer(
     };
 
   try {
-    const { workspace } = await tenantContext();
-    if (!canCreateCustomer(workspace.roleKey))
+    const membership = await customerWriteContext();
+    if (!canCreateCustomer(membership.role))
       return { status: "error", message: "Seu perfil não possui permissão para cadastrar clientes." };
 
+    const customerId = randomUUID();
     const admin = createAdminClient();
-    const { data, error } = await admin
+    const { error } = await admin
       .from("customers")
       .insert({
-        organization_id: workspace.organizationId,
+        id: customerId,
+        organization_id: membership.organization_id,
         name: parsed.data.name,
         phone: parsed.data.phone || null,
         email: parsed.data.email || null,
         consent_at: parsed.data.consent ? new Date().toISOString() : null,
-      })
-      .select("id, name")
-      .single();
+      });
     if (error) throw error;
     revalidatePath("/clientes");
-    revalidatePath("/agenda");
     return {
       status: "success",
       message: "Cliente cadastrado.",
-      data: { id: data.id, label: data.name },
+      data: { id: customerId, label: parsed.data.name },
     };
   } catch (error) {
     console.error("customer.create.failed", serializeDatabaseError(error));
