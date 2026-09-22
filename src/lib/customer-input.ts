@@ -11,3 +11,6 @@ export function parseCustomerInput(input: unknown) {
   return customerInputSchema.safeParse(input);
 }
 
+export function canCreateCustomer(roleKey: string) {
+  return ["owner", "admin", "reception"].includes(roleKey);
+}

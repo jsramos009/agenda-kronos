@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCustomerInput } from "./customer-input.ts";
+import { canCreateCustomer, parseCustomerInput } from "./customer-input.ts";
 
 test("aceita cliente somente com nome", () => {
   const result = parseCustomerInput({ name: "Pedro Fonseca", phone: "", email: "", consent: false });
@@ -18,3 +18,10 @@ test("rejeita nome curto e contato inválido", () => {
   assert.equal(parseCustomerInput({ name: "Ana Lima", phone: "", email: "email-invalido", consent: false }).success, false);
 });
 
+test("limita criação aos papéis operacionais autorizados", () => {
+  assert.equal(canCreateCustomer("owner"), true);
+  assert.equal(canCreateCustomer("admin"), true);
+  assert.equal(canCreateCustomer("reception"), true);
+  assert.equal(canCreateCustomer("professional"), false);
+  assert.equal(canCreateCustomer("analyst"), false);
+});

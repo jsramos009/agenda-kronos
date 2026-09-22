@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { niches } from "@/lib/niches";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { localDateTimeToIso } from "@/lib/calendar-grid";
-import { parseCustomerInput } from "@/lib/customer-input";
+import { canCreateCustomer, parseCustomerInput } from "@/lib/customer-input";
 
 export type ActionState = {
   status: "idle" | "success" | "error";
@@ -38,8 +39,12 @@ export async function createCustomer(
     };
 
   try {
-    const { workspace, supabase } = await tenantContext();
-    const { data, error } = await supabase
+    const { workspace } = await tenantContext();
+    if (!canCreateCustomer(workspace.roleKey))
+      return { status: "error", message: "Seu perfil não possui permissão para cadastrar clientes." };
+
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from("customers")
       .insert({
         organization_id: workspace.organizationId,
@@ -59,12 +64,28 @@ export async function createCustomer(
       data: { id: data.id, label: data.name },
     };
   } catch (error) {
+    console.error("customer.create.failed", serializeDatabaseError(error));
     return {
       status: "error",
-      message:
-        error instanceof Error ? error.message : "Falha ao cadastrar cliente.",
+      message: customerErrorMessage(error),
     };
   }
+}
+
+function serializeDatabaseError(error: unknown) {
+  if (!error || typeof error !== "object") return { message: String(error) };
+  const value = error as Record<string, unknown>;
+  return { code: value.code, message: value.message, details: value.details, hint: value.hint };
+}
+
+function customerErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String((error as { code?: unknown }).code ?? "");
+    if (code === "23505") return "Já existe um cliente com esses dados.";
+    if (code === "42501") return "Seu acesso não permite cadastrar clientes neste espaço.";
+  }
+  return "Não foi possível cadastrar o cliente. Tente novamente.";
 }
 
 export async function createService(
