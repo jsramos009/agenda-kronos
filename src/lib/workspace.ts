@@ -39,13 +39,17 @@ export const demoWorkspace: Workspace = {
   demo: true,
 };
 
+const getWorkspaceAuthContext = cache(async function getWorkspaceAuthContext() {
+  const supabase = await createClient();
+  const { data: claimData } = await supabase.auth.getClaims();
+  return { supabase, userId: claimData?.claims?.sub };
+});
+
 export const getCurrentWorkspace = cache(async function getCurrentWorkspace(): Promise<Workspace | null> {
   const cookieStore = await cookies();
   if (!isSupabaseConfigured) return demoWorkspace;
 
-  const supabase = await createClient();
-  const { data: claimData } = await supabase.auth.getClaims();
-  const userId = claimData?.claims?.sub;
+  const { supabase, userId } = await getWorkspaceAuthContext();
   if (!userId) return cookieStore.get("kronos_demo")?.value === "1" ? demoWorkspace : null;
 
   const workspaces = await getAvailableWorkspaces();
@@ -53,12 +57,7 @@ export const getCurrentWorkspace = cache(async function getCurrentWorkspace(): P
   const requestedId = cookieStore.get("kronos_workspace")?.value;
   const membership = workspaces.find((item) => item.organizationId === requestedId) ?? workspaces[0];
 
-  const [{ data: organization, error: organizationError }, { data: theme }, { data: subscription }] = await Promise.all([
-    supabase
-      .from("organizations")
-      .select("name, niche_id")
-      .eq("id", membership.organizationId)
-      .single(),
+  const [{ data: theme }, { data: subscription }] = await Promise.all([
     supabase
       .from("organization_themes")
       .select("primary_color, accent_color, soft_color, line_color")
@@ -71,13 +70,10 @@ export const getCurrentWorkspace = cache(async function getCurrentWorkspace(): P
       .maybeSingle(),
   ]);
 
-  if (organizationError) throw new Error(`Não foi possível carregar a empresa: ${organizationError.message}`);
-  const nicheId = (organization.niche_id in niches ? organization.niche_id : "climatizacao") as NicheId;
-
   return {
     organizationId: membership.organizationId,
-    companyName: organization.name,
-    nicheId,
+    companyName: membership.companyName,
+    nicheId: membership.nicheId,
     fullName: membership.displayName,
     role: membership.role,
     roleKey: membership.roleKey,
@@ -88,14 +84,13 @@ export const getCurrentWorkspace = cache(async function getCurrentWorkspace(): P
           soft: theme.soft_color,
           line: theme.line_color,
         }
-      : niches[nicheId].theme,
+      : niches[membership.nicheId].theme,
     subscriptionStatus: subscription?.status ?? "pending",
     demo: false,
   };
 });
 
 export const getAvailableWorkspaces = cache(async function getAvailableWorkspaces(): Promise<WorkspaceSummary[]> {
-  const cookieStore = await cookies();
   if (!isSupabaseConfigured) {
     return [{
       organizationId: "demo-workspace",
@@ -107,10 +102,9 @@ export const getAvailableWorkspaces = cache(async function getAvailableWorkspace
     }];
   }
 
-  const supabase = await createClient();
-  const { data: claimData } = await supabase.auth.getClaims();
-  const userId = claimData?.claims?.sub;
+  const { supabase, userId } = await getWorkspaceAuthContext();
   if (!userId) {
+    const cookieStore = await cookies();
     if (cookieStore.get("kronos_demo")?.value !== "1") return [];
     return [{
       organizationId: "demo-workspace",

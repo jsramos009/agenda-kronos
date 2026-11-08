@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getSupabaseConfig, isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSiteUrl } from "@/lib/site-url";
 
 const emailSchema = z.string().trim().email("Informe um e-mail válido.");
@@ -55,6 +55,9 @@ export async function signUp(formData: FormData) {
 
 export async function signInWithGoogle() {
   if (!isSupabaseConfigured) redirect("/entrar?erro=Conecte+o+Supabase+para+usar+o+Google.");
+  if (!(await isSupabaseAuthAvailable())) {
+    redirect("/entrar?erro=O+serviço+de+login+está+temporariamente+indisponível.+Tente+novamente+em+instantes.");
+  }
   const supabase = await createClient();
   await clearDemoState();
   const siteUrl = getSiteUrl();
@@ -67,6 +70,19 @@ export async function signInWithGoogle() {
   });
   if (error || !data.url) redirect("/entrar?erro=O+login+com+Google+ainda+não+está+disponível.");
   redirect(data.url);
+}
+
+async function isSupabaseAuthAvailable() {
+  const { supabaseUrl } = getSupabaseConfig();
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(3_000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function clearDemoState() {

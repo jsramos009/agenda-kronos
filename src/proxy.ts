@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { hasSupabaseSessionCookie } from "@/lib/supabase/session-cookie";
 
 const publicPaths = ["/", "/entrar", "/criar-conta", "/recuperar-senha", "/faq", "/privacidade", "/termos", "/auth", "/agendar", "/demonstracao", "/recibo"];
 
@@ -14,6 +15,22 @@ export async function proxy(request: NextRequest) {
   const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!supabaseUrl || !supabasePublishableKey) return NextResponse.next();
+
+  const isPublic = publicPaths.some(
+    (path) => request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(`${path}/`),
+  );
+  const isDemo = request.cookies.get("kronos_demo")?.value === "1";
+  const hasSession = hasSupabaseSessionCookie(request.cookies.getAll());
+
+  if (!hasSession) {
+    if (!isPublic && !isDemo) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/entrar";
+      url.searchParams.set("retorno", request.nextUrl.pathname);
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
 
   let response = NextResponse.next({ request });
   const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
@@ -30,11 +47,6 @@ export async function proxy(request: NextRequest) {
   });
 
   const { data } = await supabase.auth.getClaims();
-  const isPublic = publicPaths.some(
-    (path) => request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(`${path}/`),
-  );
-  const isDemo = request.cookies.get("kronos_demo")?.value === "1";
-
   if (data?.claims && isDemo) response.cookies.set("kronos_demo", "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
 
   if (!data?.claims && !isPublic && !isDemo) {
