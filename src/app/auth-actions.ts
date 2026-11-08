@@ -73,10 +73,13 @@ export async function signInWithGoogle() {
 }
 
 async function isSupabaseAuthAvailable() {
-  const { supabaseUrl } = getSupabaseConfig();
+  const { supabaseUrl, supabasePublishableKey } = getSupabaseConfig();
   try {
     const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
       cache: "no-store",
+      headers: {
+        apikey: supabasePublishableKey,
+      },
       signal: AbortSignal.timeout(3_000),
     });
     return response.ok;
