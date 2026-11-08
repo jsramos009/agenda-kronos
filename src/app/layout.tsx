@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const preferredRegion = "gru1";
-
 export const metadata: Metadata = {
   title: { default: "Kronos — Seu nicho. Seu sistema.", template: "%s | Kronos" },
   description: "Sistema de agendamento adaptativo para negócios de serviço.",
